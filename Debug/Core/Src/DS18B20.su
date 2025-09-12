@@ -1,0 +1,6 @@
+../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_ll_usart.h:1988:22:LL_USART_SetBaudRate	32	static
+../Core/Src/DS18B20.c:15:6:Temp_Sensor_Init	24	static
+../Core/Src/DS18B20.c:34:6:Temp_Sensor_Write	32	static
+../Core/Src/DS18B20.c:54:9:Temp_Sensor_ReadByte	16	static
+../Core/Src/DS18B20.c:69:9:Temp_Sensor_ReadBit	16	static
+../Core/Src/DS18B20.c:83:10:Read_Temperature	16	static

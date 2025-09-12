@@ -1,0 +1,14 @@
+../Core/Src/psram.c:57:5:psram_reset	64	static
+../Core/Src/psram.c:83:5:psram_qpi_mode_enabled	4	static
+../Core/Src/psram.c:88:5:psram_qpi_mode	72	static
+../Core/Src/psram.c:121:5:psram_read_id	72	static
+../Core/Src/psram.c:154:5:psram_internal_read_write	80	static
+../Core/Src/psram.c:211:5:psram_sector_read_write	40	static
+../Core/Src/psram.c:231:5:psram_read_write	40	static
+../Core/Src/psram.c:257:5:psram_read	24	static
+../Core/Src/psram.c:262:5:psram_write	24	static
+../Core/Src/psram.c:267:5:psram_is_initialized	4	static
+../Core/Src/psram.c:272:14:psram_get_sector_size	4	static
+../Core/Src/psram.c:277:14:psram_get_sector_count	4	static
+../Core/Src/psram.c:282:14:psram_get_size	4	static
+../Core/Src/psram.c:287:5:psram_init	16	static

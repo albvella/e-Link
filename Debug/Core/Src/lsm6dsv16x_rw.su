@@ -1,0 +1,2 @@
+../Core/Src/lsm6dsv16x_rw.c:14:9:acc_write	24	static
+../Core/Src/lsm6dsv16x_rw.c:24:9:acc_read	24	static

@@ -1,0 +1,4 @@
+../Core/Src/process.c:19:6:Data_Logging	9
+../Core/Src/process.c:85:6:Warning_Detection	7
+../Core/Src/process.c:115:6:RAM_Save_Measure	5
+../Core/Src/process.c:154:6:Send_Measure	1

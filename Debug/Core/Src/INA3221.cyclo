@@ -1,0 +1,4 @@
+../Core/Src/INA3221.c:12:6:INA3221_Init	2
+../Core/Src/INA3221.c:28:6:INA3221_Read_Measure	1
+../Core/Src/INA3221.c:39:5:INA3221_read_reg	3
+../Core/Src/INA3221.c:57:5:INA3221_write_reg	3

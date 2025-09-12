@@ -1,0 +1,8 @@
+../Core/Src/callbacks.c:14:6:HAL_TIM_IC_CaptureCallback	2
+../Core/Src/callbacks.c:29:6:HAL_GPIO_EXTI_Callback	8
+../Core/Src/callbacks.c:58:6:HAL_UARTEx_RxEventCallback	1
+../Core/Src/callbacks.c:68:6:HAL_UART_RxCpltCallback	1
+../Core/Src/callbacks.c:78:6:HAL_UART_TxCpltCallback	1
+../Core/Src/callbacks.c:88:6:HAL_ADC_ConvHalfCpltCallback	2
+../Core/Src/callbacks.c:98:6:HAL_ADC_ConvCpltCallback	2
+../Core/Src/callbacks.c:108:6:HAL_RTC_AlarmAEventCallback	1

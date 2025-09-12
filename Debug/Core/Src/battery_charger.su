@@ -1,0 +1,7 @@
+../Core/Src/battery_charger.c:14:6:BC_Init	8	static
+../Core/Src/battery_charger.c:31:5:BC_Write_Reg	32	static
+../Core/Src/battery_charger.c:47:5:BC_Read_Reg	32	static
+../Core/Src/battery_charger.c:63:5:BC_MultiWrite_Reg	32	static
+../Core/Src/battery_charger.c:80:5:BC_MultiRead_Reg	32	static
+../Core/Src/battery_charger.c:98:5:BC_Read_Flags	128	static
+../Core/Src/battery_charger.c:116:6:BC_Manage_Interrupts	40	static
