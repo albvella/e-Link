@@ -168,9 +168,9 @@ void LTE_publish_MQTT_Message(const char* topic, const char* message)
     char command[256];
     uint16_t len = (uint16_t)strlen(message);
 
-    sprintf(command, "AT+SMPUB=\"%s\",%d,1,1", topic, len);
+    sprintf(command, "AT+SMPUB=\"%s\",%d,1,1\r", topic, len);
     LTE_Send_Command(command);
-    LTE_Send_Command((char*) &message);
+    LTE_Send_Command((char*)message);
     LTE_Send_Command("\x1A");
 
 }

@@ -13,7 +13,7 @@
 /*------INIZIALIZZAZIONE BATTERY CHARGER------*/
 void BC_Init(void)
 {
-	BC_Write_Reg(REG00_MINIMAL_SYSTEM_VOLTAGE, 0x0E);           //Tensione minima di uscita con 3 celle = 9V
+	BC_Write_Reg(REG00_MINIMAL_SYSTEM_VOLTAGE, 0x0E);           //Tensione minima di uscita con 3 celle = 9V   <----- Senza Batteria il sistema fornisce questa tensione
 	BC_MultiWrite_Reg(REG01_CHARGE_VOLTAGE_LIMIT, 0x04EC);      //Limite tensione di carica con 3 celle = 12.6V
 	BC_MultiWrite_Reg(REG03_CHARGE_CURRENT_LIMIT, 0x0064);      //Limite corrente di carica con 3 celle = 1A
 	BC_Write_Reg(REG10_CHARGER_CONTROL_1, 0x85);                //Tensione di OVP in ingresso = 26V

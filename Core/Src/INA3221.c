@@ -22,7 +22,7 @@ void INA3221_Init()
 	if(rcheck != INA3221_DEFAULT_MID)
 		while(1);
 
-	INA3221_write_reg(INA3221_REG_CONFIG, 0x7D27);   //CH1 CH2 CH£ Enabled, 512 AVG, 1.1ms conv time, continous mode
+	INA3221_write_reg(INA3221_REG_CONFIG, 0x7D27);   //CH1 CH2 CH3 Enabled, 512 AVG, 1.1ms conv time, continous mode
 }
 
 void INA3221_Read_Measure(supply_bus_t *measure)
