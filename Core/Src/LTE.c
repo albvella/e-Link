@@ -44,15 +44,25 @@ void LTE_Init(void)
 	LTE_Send_Command("AT+CEREG?\r");                                                              //controllo registrazione alla rete
 	LTE_Receive_Response(response);
 	int stat = 0;
+	int n, stat_value;
 	if(strstr(response, "+CEREG: ") != NULL)
 	{
 		while(stat != 1)
 		{
-			if((response[10] == '1') || (response[10] == '5'))
+			if(sscanf(response, "+CEREG: %d,%d", &n, &stat_value) >= 2) 
 			{
-				stat = 1;
+				if(stat_value == 1 || stat_value == 5)
+			    {
+					 stat = 1;
+				}
+				 else
+				{
+					LTE_Send_Command("AT+CEREG?\r");
+					LTE_Receive_Response(response);
+					HAL_Delay(1000);
+				}
 			}
-			else
+			else  
 			{
 				LTE_Send_Command("AT+CEREG?\r");
 				LTE_Receive_Response(response);
@@ -79,14 +89,11 @@ void LTE_Init(void)
 
 	LTE_Send_Command("AT+CNACT?\r");                                                              //verifica indirizzo IP
 	LTE_Receive_Response(response);
-	if(strstr(response, "+CNACT: 1,") == NULL)
+	while(!LTE_Check_IP(response)) 
 	{
-		while(strstr(response, "+CNACT: 1,") == NULL)
-		{
-			LTE_Send_Command("AT+CNACT?\r");
-			LTE_Receive_Response(response);
-			HAL_Delay(1000);
-		}
+		LTE_Send_Command("AT+CNACT?\r");
+		LTE_Receive_Response(response);
+		HAL_Delay(1000);
 	}
 
 	sprintf(command, "AT+SMCONF=\"URL\",\"%s\",%s\r", sys.MQTT.server_name, sys.MQTT.port);       //configurazione MQTT
@@ -103,17 +110,22 @@ void LTE_Init(void)
 	sprintf(command, "AT+SMCONF=\"PASSWORD\",\"%s\"\r", sys.MQTT.password);
 	LTE_Send_Command(command);
 
+	LTE_Send_Command("AT+SMCONF=\"QOS\",1\r"); 
+
+	LTE_Send_Command("AT+SMCONF=\"RETAIN\",0\r");
+
+	sprintf(command, "AT+SMCONF=\"TOPIC\",\"%s\"\r", sys.MQTT.topic);
+	LTE_Send_Command(command);
+
 	LTE_Send_Command("AT+SMCONN\r");                                                              //connessione al server MQTT
+
 	LTE_Send_Command("AT+SMSTATE?\r");                                                            //verifica connessione al server MQTT
 	LTE_Receive_Response(response);
-	if(strstr(response, "+SMSTATE: 1") == NULL)
+	while(!LTE_Check_MQTT_State(response))
 	{
-		while(strstr(response, "+SMSTATE: 1") == NULL)
-		{
-			LTE_Send_Command("AT+SMSTATE?\r");
-			LTE_Receive_Response(response);
-			HAL_Delay(1000);
-		}
+		LTE_Send_Command("AT+SMSTATE?\r");
+		LTE_Receive_Response(response);
+		HAL_Delay(1000);
 	}
 
 	sprintf(command, "AT+SMSUB=\"%s\",1\r", sys.MQTT.topic);                                      //iscrizione al topic
@@ -162,15 +174,48 @@ void LTE_Receive_Response(char* response)
 	HAL_UARTEx_ReceiveToIdle(LTE_UART, (uint8_t *)response, max_size, &RxLen, 200);
 }
 
+/*------CONTROLLO INDIRIZZO IP------*/
+int LTE_Check_IP(const char* response)
+{
+	char* cnact_pos = strstr(response, "+CNACT:");
+    if(cnact_pos != NULL) {
+        int context_id, status;
+        if(sscanf(cnact_pos, "+CNACT: %d,%d", &context_id, &status) >= 2) {
+            return (context_id == 1 && status == 1) ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+/*------CONTROLLO STATO CONNESSIONE MQTT------*/
+int LTE_Check_MQTT_State(const char* response)
+{
+    char* smstate_pos = strstr(response, "+SMSTATE:");
+    if(smstate_pos != NULL) {
+        int mqtt_state;
+        if(sscanf(smstate_pos, "+SMSTATE: %d", &mqtt_state) >= 1) {
+            return (mqtt_state == 1) ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
 /*------PUBBLICAZIONE MESSAGGIO MQTT------*/
 void LTE_publish_MQTT_Message(const char* topic, const char* message)
 {
     char command[256];
     uint16_t len = (uint16_t)strlen(message);
 
-    sprintf(command, "AT+SMPUB=\"%s\",%d,1,1\r", topic, len);
+    if(topic != NULL && strlen(topic) > 0)
+	{
+        sprintf(command, "AT+SMPUB=\"%s\",%d,1,0\r", topic, len);
+    } 
+	else 
+	{
+        sprintf(command, "AT+SMPUB=%d\r", len);
+    }
+    
     LTE_Send_Command(command);
     LTE_Send_Command((char*)message);
     LTE_Send_Command("\x1A");
-
 }

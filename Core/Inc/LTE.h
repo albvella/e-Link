@@ -16,5 +16,7 @@ void LTE_Reset(void);
 void LTE_Init(void);
 void LTE_Send_Command(char* command);
 void LTE_Receive_Response(char* response);
+int LTE_Check_IP(const char* response);
+int LTE_Check_MQTT_State(const char* response);
 void LTE_publish_MQTT_Message(const char* topic, const char* message);
 #endif /* INC_LTE_H_ */

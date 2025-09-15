@@ -44,7 +44,7 @@ int INA3221_read_reg(uint8_t reg, uint16_t *rdata)
 	if(HAL_I2C_Master_Transmit(I2C, INA3221_ADDR_0 << 1, &reg, 1, 100) == HAL_OK)
 	{
 
-		if(HAL_I2C_Master_Receive(I2C,  (INA3221_ADDR_0 << 1) | 0x1, data, 2, 100) == HAL_OK)
+		if(HAL_I2C_Master_Receive(I2C,  INA3221_ADDR_0 << 1, data, 2, 100) == HAL_OK)
 		{
 			result = 0;
 			*rdata = (data[0] << 8) | data[1];
@@ -54,22 +54,20 @@ int INA3221_read_reg(uint8_t reg, uint16_t *rdata)
 	return result;
 }
 
+
 int INA3221_write_reg(uint8_t reg, uint16_t wdata)
 {
-	int result = -1;
-	uint8_t data[2] = {0};
+    int result = -1;
+    uint8_t data[3];
+    
+    data[0] = reg;                    
+    data[1] = (wdata >> 8);          
+    data[2] = (wdata & 0xFF);        
 
-	data[0] = (wdata >> 8);
-	data[1] = (wdata & 0xFF);
-
-	if(HAL_I2C_Master_Transmit(I2C, INA3221_ADDR_0 << 1, &reg, 1, 100) == HAL_OK)
-	{
-
-		if(HAL_I2C_Master_Transmit(I2C,  INA3221_ADDR_0 << 1, data, 2, 100) == HAL_OK)
-		{
-			result = 0;
-		}
-	}
-
-	return result;
+    if(HAL_I2C_Master_Transmit(I2C, INA3221_ADDR_0 << 1, data, 3, 100) == HAL_OK)
+    {
+        result = 0;
+    }
+    
+    return result;
 }

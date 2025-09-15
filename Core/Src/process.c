@@ -57,7 +57,7 @@ void Data_Logging(void)
 
 	RAM_Save_Measure(Logging_Buffer);
 
-	sprintf(MQTT_Logging, "%u%u%u%u%u%u%u%u%u%u", Last_Pressure, Last_Volume, Last_Acceleration, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+	sprintf(MQTT_Logging, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", Last_Pressure, Last_Volume, Last_Acceleration, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
 	LTE_publish_MQTT_Message(sys.MQTT.topic, MQTT_Logging);
 	flags.ADC_Complete = 0;
 	Address_Offset = 0;
