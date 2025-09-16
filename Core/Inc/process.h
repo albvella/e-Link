@@ -10,7 +10,7 @@
 
 #include "main.h"
 
-void Data_Logging(void);
+void Save_Data(void);
 void Warning_Detection(uint16_t* Data);
 void RAM_Save_Measure(uint8_t* Buffer);
 void Send_Measure(void);

@@ -5,10 +5,10 @@
  *      Author: albve
  */
 
+#include <SIM7000.h>
 #include "process.h"
 #include "main.h"
 #include "global_variables.h"
-#include "LTE.h"
 #include "INA3221.h"
 #include "DS18B20.h"
 #include "stdio.h"
@@ -16,7 +16,7 @@
 
 
 /*-----ACQUISIZIONE MISURE E LOG DEI DATI-----*/
-void Data_Logging(void)
+void Save_Data(void)
 {
 	if(flags.ADC_Half_Buffer)
 	{
@@ -57,8 +57,6 @@ void Data_Logging(void)
 
 	RAM_Save_Measure(Logging_Buffer);
 
-	sprintf(MQTT_Logging, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", Last_Pressure, Last_Volume, Last_Acceleration, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
-	LTE_publish_MQTT_Message(sys.MQTT.topic, MQTT_Logging);
 	flags.ADC_Complete = 0;
 	Address_Offset = 0;
 

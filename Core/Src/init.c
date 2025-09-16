@@ -5,6 +5,7 @@
  *      Author: albve
  */
 
+#include <SIM7000.h>
 #include "init.h"
 #include "peripherals.h"
 #include "global_variables.h"
@@ -12,7 +13,6 @@
 #include "FatFs/ff.h"
 #include "battery_charger.h"
 #include "string.h"
-#include "LTE.h"
 #include "lsm6dsv16x_reg.h"
 #include "lsm6dsv16x_rw.h"
 
@@ -29,7 +29,7 @@ void System_Init(void)
 	INA3221_Init();
 	Acc_Init(&acc);
 	FatFS_Init();
-	LTE_Init();
+	SIM_Init();
 	RTC_Init();
 	LED_Start(RED_LED, ON);
 	HAL_Delay(9000);
@@ -106,7 +106,7 @@ void RTC_Init(void)
 	RTC_DateTypeDef sDate = {0};
 	RTC_TimeTypeDef sTime = {0};
 
-	LTE_Send_Command("AT+CCLK?\r");
+	SIM_Send_Command("AT+CCLK?\r");
 	for(int i = 0; i < strlen(LTE_Ack_buffer); i++)
 	{
 		DateTime[i] = LTE_Ack_buffer[i];

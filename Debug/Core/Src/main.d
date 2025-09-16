@@ -45,7 +45,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Inc/INA3221_reg.h ../Core/Inc/lsm6dsv16x_reg.h \
  ../Core/Inc/DS18B20.h ../Core/Inc/INA3221.h ../Core/Inc/INA3221_reg.h \
  ../Core/Inc/init.h ../Core/Inc/process.h ../Core/Inc/FatFS/ff.h \
- ../Core/Inc/battery_charger.h ../Core/Inc/lsm6dsv16x_reg.h
+ ../Core/Inc/battery_charger.h ../Core/Inc/lsm6dsv16x_reg.h \
+ ../Core/Inc/SIM7000.h
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
 ../Core/Inc/stm32l4xx_hal_conf.h:
@@ -104,3 +105,4 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/FatFS/ff.h:
 ../Core/Inc/battery_charger.h:
 ../Core/Inc/lsm6dsv16x_reg.h:
+../Core/Inc/SIM7000.h:

@@ -53,6 +53,10 @@ typedef struct {
 	uint8_t BC_Interrupt : 1;
 	uint8_t ACC_Present : 1;
 	uint8_t ACC_Complete : 1;
+	uint8_t MQTT_Message_Rx :1;
+	uint8_t Data_Request : 1;
+	uint8_t Start_OTA : 1;
+	uint8_t Ping : 1;
 } System_Flags_TypeDef;
 
 typedef struct {
@@ -61,7 +65,8 @@ typedef struct {
 	char username[100];
 	char password[100];
 	char clientID[100];
-	char topic[100];
+	char Data_Topic[100];
+	char Command_Topic[100];
 } MQTT_TypeDef;
 
 typedef struct {

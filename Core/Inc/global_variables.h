@@ -24,8 +24,9 @@
 #define MEASURE_FILE_NAME_1 "/ram/meas1.bin"
 #define MEASURE_FILE_NAME_2 "/ram/meas2.bin"
 
-#define ACC_FIFO_WATERMARK 100
-#define PRESS_HALF_SAMPLES 1000
+#define SIM_RXBUFFER_SIZE 1024
+#define ACC_FIFO_WATERMARK 200
+#define PRESS_HALF_SAMPLES ACC_FIFO_WATERMARK * 2
 #define PRESS_FULL_SAMPLES PRESS_HALF_SAMPLES * 2
 #define MAX_VOLUME_LEN 40
 #define ACCELERATION_LEN ACC_FIFO_WATERMARK * 7
@@ -78,6 +79,10 @@ extern uint16_t Low_TH[24];
 extern stmdev_ctx_t acc;
 extern lsm6dsv16x_fifo_status_t fifo_status;
 extern uint16_t num;
+
+extern uint8_t sim_rx_buffer[SIM_RXBUFFER_SIZE];
+extern uint16_t sim_write_ptr;
+extern uint16_t sim_read_ptr;
 
 
 #endif /* INC_GLOBAL_VARIABLES_H_ */

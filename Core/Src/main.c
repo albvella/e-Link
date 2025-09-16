@@ -34,6 +34,7 @@
 #include "string.h"
 #include "battery_charger.h"
 #include "lsm6dsv16x_reg.h"
+#include "SIM7000.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,6 +74,7 @@ TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart1;
+DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 Machine_State_TypeDef state = MEASURE_INIT_STATE;
@@ -115,6 +117,10 @@ uint16_t Low_TH[24] = {0};
 stmdev_ctx_t acc;
 lsm6dsv16x_fifo_status_t fifo_status;
 uint16_t num = 0;
+
+uint8_t sim_rx_buffer[SIM_RXBUFFER_SIZE] = {0};
+uint16_t sim_write_ptr = 0;
+uint16_t sim_read_ptr = 0;
 
 /* USER CODE END PV */
 
@@ -218,12 +224,31 @@ int main(void)
 	  case MEASURING_STATE:
 		  if(flags.ADC_Complete && flags.ACC_Complete)
 		  {
-			  Data_Logging();
+			  Save_Data();
 			  if(flags.BC_Interrupt)
 			  {
 				  BC_Read_Flags(&sys.BC_Flags);
 				  BC_Manage_Interrupts(sys.BC_Flags);
 				  flags.BC_Interrupt = 0;
+			  }
+			  if(flags.MQTT_Message_Rx)
+			  {
+				  SIM_Parse_Message();
+				  flags.MQTT_Message_Rx = 0;
+			  }
+			  if(flags.Data_Request)
+			  {
+				  sprintf(MQTT_Logging, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", Last_Pressure, Last_Volume, Last_Acceleration, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+				  SIM_publish_MQTT_Message(NULL, MQTT_Logging);
+				  flags.Data_Request = 0;
+			  }
+			  else if(flags.Start_OTA)
+			  {
+				  flags.Start_OTA = 0;
+			  }
+			  else if(flags.Ping)
+			  {
+				  flags.Ping = 0;
 			  }
 		  }
 		  break;
@@ -973,6 +998,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 
 }
 

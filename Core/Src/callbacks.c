@@ -58,11 +58,17 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 /* ------CALLBACK UART RX IDLE------*/
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-	if (huart == LTE_UART)
-	{
+    if(huart == LTE_UART && Size > 8)
+    {
+        // Check velocissimo: pattern "+SMSUB: " all'inizio buffer
+        if(*(uint32_t*)sim_rx_buffer == 0x534D532B &&           // "+SMS"
+           *(uint32_t*)(sim_rx_buffer + 4) == 0x203A4255) {        // "UB: "
+            flags.MQTT_Message_Rx = 1;
+        }
 
-	}
-
+    }
+	
+	HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 }
 
 /* ------CALLBACK UART RX COMPLETE------*/
