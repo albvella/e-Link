@@ -29,8 +29,12 @@ void System_Init(void)
 	INA3221_Init();
 	Acc_Init(&acc);
 	FatFS_Init();
+	Config_Init();
 	SIM_Init();
 	RTC_Init();
+
+	HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
+
 	LED_Start(RED_LED, ON);
 	HAL_Delay(9000);
 
@@ -47,7 +51,11 @@ void FatFS_Init(void)
 	do
 	{
 		flags.RAM_Mounted = 0;
-		mkfs_opt.fmt = FM_FAT;
+		
+		mkfs_opt.fmt = FM_FAT32;
+		mkfs_opt.au_size = 1024; 
+		mkfs_opt.n_fat = 1;
+		mkfs_opt.align = 1;
 
 		fRes = f_mkfs("/ram", &mkfs_opt, psram_fs.win, sizeof(psram_fs.win));
 		if (fRes != FR_OK)
@@ -69,14 +77,16 @@ void FatFS_Init(void)
 
 	do
 	{
-		memset((void *)&mkfs_opt, 0, sizeof(mkfs_opt));
-
 		flags.FLASH_Mounted = 0;
 		fRes = f_mount(&flash_fs, "/flash", 1);
 
 		if (fRes == FR_NO_FILESYSTEM)
 		{
-			mkfs_opt.fmt = FM_FAT;
+			memset((void *)&mkfs_opt, 0, sizeof(mkfs_opt));
+			mkfs_opt.fmt = FM_FAT32;
+			mkfs_opt.au_size = 4096;    
+			mkfs_opt.n_fat = 1;
+			mkfs_opt.align = 1;
 
 			fRes = f_mkfs("/flash", &mkfs_opt, flash_fs.win, sizeof(flash_fs.win));
 			if (fRes != FR_OK)
@@ -99,34 +109,6 @@ void FatFS_Init(void)
 
 }
 
-/*-----INIZiALIZZAZIONE ORA RTC-----*/
-void RTC_Init(void)
-{
-	char DateTime[30] = "";
-	RTC_DateTypeDef sDate = {0};
-	RTC_TimeTypeDef sTime = {0};
-
-	SIM_Send_Command("AT+CCLK?\r");
-	for(int i = 0; i < strlen(LTE_Ack_buffer); i++)
-	{
-		DateTime[i] = LTE_Ack_buffer[i];
-	}
-
-	sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-	sDate.Year = (DateTime[7] - '0') * 10 + (DateTime[8] - '0');
-	sDate.Month = (DateTime[10] - '0') * 10 + (DateTime[11] - '0');
-	sDate.Date = (DateTime[13] - '0') * 10 + (DateTime[14] - '0');
-
-	sTime.Hours = (DateTime[16] - '0') * 10 + (DateTime[17] - '0');
-	sTime.Minutes = (DateTime[19] - '0') * 10 + (DateTime[20] - '0');
-	sTime.Seconds = (DateTime[22] - '0') * 10 + (DateTime[23] - '0');
-	sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-	sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-
-	HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-	HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
-}
-
 /*-----INIZiALIZZAZIONE ACCELEROMETRO-----*/
 void Acc_Init(stmdev_ctx_t* acc)
 {
@@ -136,6 +118,7 @@ void Acc_Init(stmdev_ctx_t* acc)
 	uint8_t wmi_cnt = 0;
 
 	pin_int.fifo_th = PROPERTY_ENABLE;
+
 
 	lsm6dsv16x_device_id_get(acc, &acc_whoamI);
 	if (acc_whoamI != LSM6DSV16X_ID)
@@ -178,4 +161,47 @@ void Acc_Init(stmdev_ctx_t* acc)
 	lsm6dsv16x_pin_int1_route_set(acc, &pin_int);
 
 	__HAL_GPIO_EXTI_CLEAR_IT(ACC_INTERRUPT);
+}
+
+/*-----INIZiALIZZAZIONE CONFIGURAZIONE-----*/
+void Config_Init(void)
+{
+    FIL config_file;
+    UINT bytes_read;
+    UINT bytes_written;
+
+    if (f_open(&config_file, APP_CONFIG_FILE, FA_READ) == FR_OK) 
+	{
+        if (f_read(&config_file, &config, sizeof(config), &bytes_read) == FR_OK && bytes_read == sizeof(config))
+		{
+			f_close(&config_file);
+			return;
+        }
+        f_close(&config_file);
+    }
+
+    config.device_id = 0;
+	config.hammer_th = 2048;
+    for(int i = 0; i < 24; i++) 
+	{
+        config.low_th[i] = 0;
+        config.high_th[i] = 4096;
+    }
+    strcpy(config.data_topic, "Data_Topic");
+    strcpy(config.command_topic, "Command_Topic");  
+    strcpy(config.ota_topic, "OTA_Topic");
+    
+    if (f_open(&config_file, APP_CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+    {
+        return;
+    }
+
+    if (f_write(&config_file, &config, sizeof(Config_Typedef), &bytes_written) != FR_OK || bytes_written != sizeof(Config_Typedef)) 
+	{
+        f_close(&config_file);
+        return;
+    }
+    
+    f_sync(&config_file);
+    f_close(&config_file);
 }

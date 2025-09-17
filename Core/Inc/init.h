@@ -13,7 +13,11 @@
 
 void System_Init(void);
 void FatFS_Init(void);
-void RTC_Init(void);
 void Acc_Init(stmdev_ctx_t* acc);
+void RTC_Init(void);
+int Get_DateTime_From_Network(void);
+void Set_Default_DateTime(void);
+uint8_t Calculate_Weekday(uint16_t year, uint8_t month, uint8_t day);
+void Config_Init(void);
 
 #endif /* INC_INIT_H_ */

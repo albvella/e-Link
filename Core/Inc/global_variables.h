@@ -42,6 +42,7 @@
 extern Machine_State_TypeDef state;
 extern System_Resources_Typedef sys;
 extern System_Flags_TypeDef flags;
+extern Config_Typedef config;
 
 extern FATFS psram_fs;
 extern FATFS flash_fs;
@@ -73,6 +74,7 @@ extern uint16_t Saves_cnt;
 
 extern FRESULT res;
 
+extern uint16_t Hammer_Th;
 extern uint16_t High_TH[24];
 extern uint16_t Low_TH[24];
 
@@ -83,6 +85,10 @@ extern uint16_t num;
 extern uint8_t sim_rx_buffer[SIM_RXBUFFER_SIZE];
 extern uint16_t sim_write_ptr;
 extern uint16_t sim_read_ptr;
+
+extern char cfg_var[20];
+extern int cfg_idx;
+extern char new_cfg_val[10];
 
 
 #endif /* INC_GLOBAL_VARIABLES_H_ */

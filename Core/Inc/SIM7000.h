@@ -18,6 +18,7 @@ void SIM_Send_Command(char* command);
 void SIM_Receive_Response(char* response);
 int SIM_Check_IP(const char* response);
 int SIM_Check_MQTT_State(const char* response);
-void SIM_Parse_Message(void);
+void SIM_Parse_Command(void);
+void SIM_Parse_Cfg(char* cmd_start, char* cmd_end);
 void SIM_publish_MQTT_Message(const char* topic, const char* message);
 #endif /* INC_SIM7000_H_ */

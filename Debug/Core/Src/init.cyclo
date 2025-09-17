@@ -1,4 +1,4 @@
 ../Core/Src/init.c:20:6:System_Init	1
-../Core/Src/init.c:42:6:FatFS_Init	6
-../Core/Src/init.c:103:6:RTC_Init	2
-../Core/Src/init.c:131:6:Acc_Init	5
+../Core/Src/init.c:46:6:FatFS_Init	6
+../Core/Src/init.c:113:6:Acc_Init	5
+../Core/Src/init.c:167:6:Config_Init	8

@@ -13,16 +13,18 @@
 
 #define PSRAM_PAGE_SIZE		(1024)
 
-#define PSRAM_MANUFACTURER 	(0x9D)
+#define PSRAM_MANUFACTURER 	(0x0D)
 #define PSRAM_KGD			(0x5D)
 
 #define PSRAM_DENSITY_8MB	(0)
 #define PSRAM_DENSITY_16MB	(1)
 #define PSRAM_DENSITY_32MB	(2)
+#define PSRAM_DENSITY_64MB	(3)
 
 #define PSRAM_DENSITY_8MB_EADDR		(0x100000)
 #define PSRAM_DENSITY_16MB_EADDR	(0x200000)
 #define PSRAM_DENSITY_32MB_EADDR	(0x400000)
+#define PSRAM_DENSITY_64MB_EADDR	(0x800000)
 
 
 #define PSRAM_CMD_READ_ID					(0x9F)
@@ -253,6 +255,32 @@ int psram_read_write(uint8_t write, uint32_t address, uint32_t nbytes, uint8_t *
 	return 0;
 }
 
+int raw_psram_read_write(uint8_t write, uint32_t address, uint32_t nbytes, uint8_t *pBuffer)
+{
+	int result = 0;
+	uint32_t trBytes = 0;
+	uint8_t *wPtr = pBuffer;
+
+	//Check indirizzo
+	if(!psramInitDone || pBuffer==NULL)return -1;
+	if(address + nbytes >= psramSize)return -2;
+
+	trBytes = 1024 - address % 1024;
+	while(nbytes > 0)
+	{
+		result = psram_internal_read_write(write, address, trBytes, wPtr);
+
+		if(result < 0)return -1;
+
+		address += trBytes;
+		wPtr += trBytes;
+		nbytes -= trBytes;
+		trBytes = nbytes > PSRAM_PAGE_SIZE ? PSRAM_PAGE_SIZE : nbytes;
+	}
+
+	return 0;
+}
+
 
 int psram_read(uint32_t address, uint32_t nbytes, uint8_t *pBuffer)
 {
@@ -262,6 +290,11 @@ int psram_read(uint32_t address, uint32_t nbytes, uint8_t *pBuffer)
 int psram_write(uint32_t address, uint32_t nbytes, uint8_t *pBuffer)
 {
 	return psram_read_write(1, address, nbytes, pBuffer);
+}
+
+int RAM_Write(uint32_t address, uint32_t nbytes, uint8_t *pBuffer)
+{
+	return raw_psram_read_write(1, address, nbytes, pBuffer);
 }
 
 int psram_is_initialized()
@@ -299,18 +332,9 @@ int psram_init()
 
 	density = psramId[2] >> 5;
 
-	if(psramId[0] == PSRAM_MANUFACTURER && psramId[1] == PSRAM_KGD && density <= PSRAM_DENSITY_32MB)
+	if(psramId[0] == PSRAM_MANUFACTURER && psramId[1] == PSRAM_KGD && density <= PSRAM_DENSITY_64MB)
 	{
-		if(density == PSRAM_DENSITY_32MB)
-		{
-			psramSize = PSRAM_DENSITY_32MB_EADDR;
-		}else if(density == PSRAM_DENSITY_16MB)
-		{
-			psramSize = PSRAM_DENSITY_16MB_EADDR;
-		}else{
-			psramSize = PSRAM_DENSITY_8MB_EADDR;
-		}
-
+		psramSize = PSRAM_DENSITY_64MB_EADDR;
 		psramNumPages = psramSize / PSRAM_PAGE_SIZE;
 
 		psram_qpi_mode(1);

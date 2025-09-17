@@ -23,8 +23,9 @@ void SIM_Init(void)
 	sprintf(sys.MQTT.port, "a");
 	sprintf(sys.MQTT.username, "a");
 	sprintf(sys.MQTT.password, "a");
-	sprintf(sys.MQTT.Data_Topic, "a");
-	sprintf(sys.MQTT.Command_Topic, "a");
+	strcpy(sys.MQTT.Data_Topic, config.data_topic);
+	strcpy(sys.MQTT.Command_Topic, config.command_topic);
+	strcpy(sys.MQTT.OTA_Topic, config.ota_topic);
 
 	SIM_Power_On();
 	HAL_Delay(5000);
@@ -131,9 +132,6 @@ void SIM_Init(void)
 
 	sprintf(command, "AT+SMSUB=\"%s\",1\r", sys.MQTT.Command_Topic);                              //iscrizione al topic di richiesta dati dal server
 	SIM_Send_Command(command);
-
-	HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
-
 }
 
 /*------ACCENSIONE DEL MODULO LTE------*/
@@ -204,7 +202,7 @@ int SIM_Check_MQTT_State(const char* response)
 }
 
 /*------PARSING MESSAGGIO MQTT------*/
-void SIM_Parse_Message(void)
+void SIM_Parse_Command(void)
 {
     char* buf = (char*)sim_rx_buffer;
 
@@ -228,14 +226,80 @@ void SIM_Parse_Message(void)
                         uint32_t cmd_val = (cmd_pos[2] << 16) | (cmd_pos[1] << 8) | cmd_pos[0];
 
                         switch(cmd_val) {
-                            case 0x444E53: flags.Data_Request = 1; break;  // SND
-                            case 0x41544F: flags.Start_OTA = 1; break;     // OTA
-                            case 0x474E50: flags.Ping = 1; break;  // PNG
+							case 0x4C4449: // IDL
+								flags.CMD.Idle = 1; 
+								break;    
+							case 0x545253: // SRT
+								flags.CMD.Start_Meas = 1; 
+								break;
+                            case 0x474E50: // PNG
+								flags.CMD.Ping = 1; 
+								break;
+                            case 0x444E53: // SND
+								flags.CMD.Data_Request = 1; 
+								break;
+                            case 0x41544F: // OTA
+								if(state == IDLE)
+								{
+									flags.CMD.Start_OTA = 1;
+								} 
+								break;
+							case 0x544553: // SET
+								if(state == IDLE)
+								{
+									flags.CMD.Set_Config = 1;
+									SIM_Parse_Cfg(cmd_pos, fourth_quote);
+								}
+							case 0x545352: // RST
+								HAL_NVIC_SystemReset();
+								break;
+							default: 
+								break;
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/*-----PARSING CONFIGURAZIONE-----*/
+void SIM_Parse_Cfg(char* cmd_start, char* cmd_end)
+{   
+    memset(cfg_var, 0, sizeof(cfg_var));
+    memset(new_cfg_val, 0, sizeof(new_cfg_val));
+    
+    char* pos = cmd_start + 4; // Salta "SET,"
+    
+    // Prima virgola (dopo SET)
+    char* comma1 = strchr(pos, ',');
+    if(!comma1 || comma1 >= cmd_end) return;
+    
+    // Seconda virgola
+    char* comma2 = strchr(comma1 + 1, ',');
+    if(!comma2 || comma2 >= cmd_end) return;
+    
+    // Terza virgola
+    char* comma3 = strchr(comma2 + 1, ',');
+    if(!comma3 || comma3 >= cmd_end) return;
+    
+    // Estrai cfg_var (tra SET, e prima virgola)
+    int var_len = comma2 - comma1 - 1;
+    if(var_len > 0 && var_len < sizeof(cfg_var)) 
+	{
+        strncpy(cfg_var, comma1 + 1, var_len);
+        cfg_var[var_len] = '\0';
+    }
+    
+    // Estrai cfg_idx
+    cfg_idx = atoi(comma2 + 1);
+    
+    // Estrai new_cfg_val
+    int val_len = cmd_end - comma3 - 1;
+    if(val_len > 0 && val_len < sizeof(new_cfg_val)) 
+	{
+        strncpy(new_cfg_val, comma3 + 1, val_len);
+        new_cfg_val[val_len] = '\0';
     }
 }
 

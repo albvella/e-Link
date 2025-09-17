@@ -37,10 +37,20 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 typedef enum {
+    IDLE,
 	MEASURE_INIT_STATE,
 	MEASURING_STATE,
 	SEND_RECORDING_STATE
 } Machine_State_TypeDef;
+
+typedef struct {
+	uint8_t Data_Request : 1;
+	uint8_t Start_OTA : 1;
+	uint8_t Ping : 1;
+	uint8_t Set_Config : 1;
+	uint8_t Start_Meas : 1;
+	uint8_t Idle : 1;
+} CMD_Typedef;
 
 typedef struct {
 	uint8_t ADC_Complete : 1;
@@ -54,9 +64,7 @@ typedef struct {
 	uint8_t ACC_Present : 1;
 	uint8_t ACC_Complete : 1;
 	uint8_t MQTT_Message_Rx :1;
-	uint8_t Data_Request : 1;
-	uint8_t Start_OTA : 1;
-	uint8_t Ping : 1;
+    CMD_Typedef CMD;
 } System_Flags_TypeDef;
 
 typedef struct {
@@ -67,26 +75,33 @@ typedef struct {
 	char clientID[100];
 	char Data_Topic[100];
 	char Command_Topic[100];
+	char OTA_Topic[100];
 } MQTT_TypeDef;
 
 typedef struct {
     uint8_t file_ota_open;
     FIL file_ota;
     uint32_t file_ota_written;
-
     uint8_t file_meas_1_open;
     FIL file_meas_1;
     uint8_t file_meas_2_open;
     FIL file_meas_2;
-
     uint16_t Low_th;
     uint16_t High_th;
-
     uint64_t BC_Flags;
-
     char apn[100];
     MQTT_TypeDef MQTT;
 } System_Resources_Typedef;
+
+typedef struct {
+    uint8_t device_id;
+    uint16_t hammer_th;                    
+    uint16_t low_th[24];                   
+    uint16_t high_th[24];                  
+    char data_topic[64];                   
+    char command_topic[64];                
+    char ota_topic[64];                                           
+} Config_Typedef;  
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

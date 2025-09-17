@@ -1,4 +1,5 @@
-../Core/Src/process.c:19:6:Save_Data	8	static
-../Core/Src/process.c:84:6:Warning_Detection	24	static
-../Core/Src/process.c:114:6:RAM_Save_Measure	24	static
-../Core/Src/process.c:153:6:Send_Measure	4	static
+../Core/Src/process.c:20:6:Save_Data	8	static
+../Core/Src/process.c:85:6:Warning_Detection	24	static
+../Core/Src/process.c:115:6:RAM_Save_Measure	24	static
+../Core/Src/process.c:154:6:Send_Measure	4	static
+../Core/Src/process.c:160:6:Apply_Config	4152	static

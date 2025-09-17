@@ -14,5 +14,6 @@ void Save_Data(void);
 void Warning_Detection(uint16_t* Data);
 void RAM_Save_Measure(uint8_t* Buffer);
 void Send_Measure(void);
+void Apply_Config(void);
 
 #endif /* INC_PROCESS_H_ */

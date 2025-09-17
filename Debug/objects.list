@@ -1,5 +1,6 @@
 "./Core/Src/DS18B20.o"
 "./Core/Src/INA3221.o"
+"./Core/Src/RTC.o"
 "./Core/Src/SIM7000.o"
 "./Core/Src/battery_charger.o"
 "./Core/Src/callbacks.o"
