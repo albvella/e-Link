@@ -23,6 +23,8 @@ void SIM_Init(void)
 	sprintf(sys.MQTT.port, "a");
 	sprintf(sys.MQTT.username, "a");
 	sprintf(sys.MQTT.password, "a");
+	sprintf(sys.TCP.IP_address, "a");
+	sprintf(sys.TCP.Port, "a");
 	strcpy(sys.MQTT.Data_Topic, config.data_topic);
 	strcpy(sys.MQTT.Command_Topic, config.command_topic);
 	strcpy(sys.MQTT.OTA_Topic, config.ota_topic);
@@ -38,16 +40,22 @@ void SIM_Init(void)
 	}
 
 	SIM_Send_Command("AT+IPR=921600\r");                                                          //Baudrate a 921600
+	SIM_Wait_Response("OK");
+
 	huart1.Init.BaudRate = 921600;
 	HAL_UART_Init(LTE_UART);
 
 	SIM_Send_Command("AT+CFUN=1\r");                                                              //Full functionality
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+CNMP=38\r");                                                             //Modalità solo LTE o NB-IoT
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+CMNB=2\r");                                                              //NB-IoT
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+NBSC=1\r");                                                              //Abilitazione scrambling feature DA VEDERE SE L'OPERATORE LA RICHIEDE
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+CEREG?\r");                                                              //Controllo registrazione alla rete
 	SIM_Receive_Response(response);
@@ -82,6 +90,7 @@ void SIM_Init(void)
 
 	sprintf(command, "AT+CGDCONT=1,\"IP\",\"%s\"\r", sys.apn);                                    //Configurazione APN
 	SIM_Send_Command(command);
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+CNACT=1\r");                                                             //Attivazione della rete
 	SIM_Receive_Response(response);
@@ -106,28 +115,37 @@ void SIM_Init(void)
 
 	sprintf(command, "AT+SMCONF=\"URL\",\"%s\",%s\r", sys.MQTT.server_name, sys.MQTT.port);       //Configurazione MQTT
 	SIM_Send_Command(command);
+	SIM_Wait_Response("OK");
 
 	sprintf(command, "AT+SMCONF=\"CLIENTID\",\"%s\"\r", sys.MQTT.clientID);
 	SIM_Send_Command(command);
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+SMCONF=\"KEEPTIME\",60\r");
+	SIM_Wait_Response("OK");
 
 	sprintf(command, "AT+SMCONF=\"USERNAME\",\"%s\"\r", sys.MQTT.username);
 	SIM_Send_Command(command);
+	SIM_Wait_Response("OK");
 
 	sprintf(command, "AT+SMCONF=\"PASSWORD\",\"%s\"\r", sys.MQTT.password);
 	SIM_Send_Command(command);
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+SMCONF=\"QOS\",1\r");
+	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+SMCONF=\"RETAIN\",0\r");
+	SIM_Wait_Response("OK");
 
 	sprintf(command, "AT+SMCONF=\"TOPIC\",\"%s\"\r", sys.MQTT.Data_Topic);
 	SIM_Send_Command(command);
+	SIM_Wait_Response("OK");
 
-	SIM_Send_Command("AT+SMCONN\r");                                                              //Connessione al server MQTT
+	SIM_Send_Command("AT+SMCONN\r");                                                              //Connessione al broker MQTT
+	SIM_Wait_Response("OK");
 
-	SIM_Send_Command("AT+SMSTATE?\r");                                                            //Verifica connessione al server MQTT
+	SIM_Send_Command("AT+SMSTATE?\r");                                                            //Verifica connessione al broker MQTT
 	SIM_Receive_Response(response);
 	while(!SIM_Check_MQTT_State(response))
 	{
@@ -138,6 +156,21 @@ void SIM_Init(void)
 
 	sprintf(command, "AT+SMSUB=\"%s\",1\r", sys.MQTT.Command_Topic);                              //Iscrizione al topic per ricezione comandi dal server
 	SIM_Send_Command(command);
+	SIM_Wait_Response("OK");
+
+	sprintf(command, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);        //Connessione TCP
+	SIM_Send_Command(command);
+	SIM_Wait_Response("CONNECT OK");
+
+	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        //Verifica connessione al server TCP
+	SIM_Receive_Response(response);
+	while(!SIM_Check_TCP_State(response))
+	{
+		SIM_Send_Command("AT+CIPSTATUS=0\r");
+		SIM_Receive_Response(response);
+		HAL_Delay(1000);
+	}
+
 }
 
 /*------ACCENSIONE DEL MODULO LTE------*/
@@ -210,6 +243,19 @@ int SIM_Check_MQTT_State(const char* response)
         int mqtt_state;
         if(sscanf(smstate_pos, "+SMSTATE: %d", &mqtt_state) >= 1) {
             return (mqtt_state == 1) ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+/*------CONTROLLO STATO CONNESSIONE TCP------*/
+int SIM_Check_TCP_State(const char* response)
+{
+    char* cipstatus_pos = strstr(response, "+CIPSTATUS: 0");
+    if(cipstatus_pos != NULL) {
+        // Cerca "CONNECTED" nella stessa riga
+        if(strstr(cipstatus_pos, "CONNECTED") != NULL) {
+            return 1;
         }
     }
     return 0;
@@ -363,7 +409,7 @@ void SIM_Wait_Response(const char* expected)
     while((HAL_GetTick() - start_time) < timeout)
     {
         uint16_t RxLen = 0;
-        HAL_UARTEx_ReceiveToIdle(LTE_UART, (uint8_t*)response, sizeof(response), &RxLen, 200);
+        HAL_UARTEx_ReceiveToIdle(LTE_UART, (uint8_t*)response, sizeof(response), &RxLen, 500);
         
         if(RxLen > 0 && strstr(response, expected) != NULL)
         {

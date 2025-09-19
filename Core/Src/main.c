@@ -258,7 +258,7 @@ int main(void)
 				}
 				if(flags.CMD.Data_Request)
 				{
-					sprintf(MQTT_Logging, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+					sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
 					SIM_publish_MQTT_Message(NULL, MQTT_Logging);
 					sys.SIM_Prompt_Status = HAL_GetTick();
 					flags.CMD.Data_Request = 0;
@@ -290,6 +290,7 @@ int main(void)
 			HAL_ADC_Stop_DMA(PRESSURE_ADC);
 			HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
 			Send_Measure();
+      HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 			state = MEASURE_INIT_STATE;
 			break;
 

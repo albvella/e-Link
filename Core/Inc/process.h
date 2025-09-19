@@ -18,5 +18,6 @@ void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_dat
 void Send_Measure(void);
 void Apply_Config(void);
 uint16_t Compress_Sample(uint8_t* input, uint16_t input_len, uint8_t* output);
+void Clear_Flags(void);
 
 #endif /* INC_PROCESS_H_ */

@@ -50,7 +50,7 @@ void FatFS_Init(void)
 
 	do
 	{
-		flags.RAM_Mounted = 0;
+		sys.RAM_Mounted = 0;
 		
 		mkfs_opt.fmt = FM_FAT32;
 		mkfs_opt.au_size = 1024; 
@@ -70,14 +70,14 @@ void FatFS_Init(void)
 			break;
 		}
 
-		flags.RAM_Mounted = 1;
+		sys.RAM_Mounted = 1;
 
 		break;
 	} while (1);
 
 	do
 	{
-		flags.FLASH_Mounted = 0;
+		sys.FLASH_Mounted = 0;
 		fRes = f_mount(&flash_fs, "/flash", 1);
 
 		if (fRes == FR_NO_FILESYSTEM)
@@ -101,7 +101,7 @@ void FatFS_Init(void)
 			}
 		}
 
-		flags.FLASH_Mounted = 1;
+		sys.FLASH_Mounted = 1;
 
 		break;
 	} while (1);
@@ -128,12 +128,12 @@ void Acc_Init(stmdev_ctx_t* acc)
 			wmi_cnt++;
 			if (wmi_cnt == 3)
 			{
-				flags.ACC_Present = 0;
+				sys.ACC_Present = 0;
 				flags.ACC_Complete = 1;
 				return;
 			}
 		}
-	flags.ACC_Present = 1;
+	sys.ACC_Present = 1;
 	lsm6dsv16x_reset_set(acc, LSM6DSV16X_GLOBAL_RST);
 	do {
 		lsm6dsv16x_reset_get(acc, &rst);
@@ -153,7 +153,6 @@ void Acc_Init(stmdev_ctx_t* acc)
 	lsm6dsv16x_xl_mode_set(acc, LSM6DSV16X_XL_ODR_TRIGGERED_MD);
 	lsm6dsv16x_gy_mode_set(acc, LSM6DSV16X_GY_ODR_TRIGGERED_MD);
 	lsm6dsv16x_den_polarity_set(acc, LSM6DSV16X_DEN_ACT_HIGH);
-	HAL_TIM_PWM_Start(ACC_TIMER, TIM_CHANNEL_3);
 	lsm6dsv16x_xl_data_rate_set(acc, LSM6DSV16X_ODR_AT_960Hz);
 	lsm6dsv16x_xl_full_scale_set(acc, LSM6DSV16X_2g);
 	lsm6dsv16x_gy_full_scale_set(acc, LSM6DSV16X_2000dps);

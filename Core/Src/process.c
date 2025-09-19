@@ -61,7 +61,7 @@ void Save_Data(void)
 	Period_cnt = 0;
 	Address_Offset += MAX_VOLUME_LEN;
 
-	if(flags.ACC_Present)
+	if(sys.ACC_Present)
 	{
 		memcpy(Saving_Buffer + Address_Offset, Acceleration, ACCELERATION_LEN);
 		Last_Acceleration.x = 0;
@@ -132,6 +132,14 @@ void Start_Measure(void)
 	Saved_Samples = 0;
 	Address_Offset = 0;
 	Cycles_After_Warning = 0;
+	Clear_Flags();
+
+	ADC_TIMER->Instance->PSC = 100 - 1;
+	ADC_TIMER->Instance->ARR = (uint32_t)(SystemCoreClock / (ADC_TIMER->Instance->PSC * config.samp_freq)) - 1;
+	ACC_TIMER->Instance->ARR = (uint32_t)(config.samp_freq / 25) - 1;
+	ACC_TIMER->Instance->CCR3 = (uint32_t)((ACC_TIMER->Instance->ARR + 1) / 2);
+
+	HAL_TIM_PWM_Start(ACC_TIMER, TIM_CHANNEL_3);
 	HAL_ADC_Start_DMA(PRESSURE_ADC, (uint32_t*)&Pressure, PRESS_FULL_SAMPLES);
 	HAL_TIM_OC_Start_IT(ADC_TIMER, TIM_CHANNEL_3);
 }
@@ -196,6 +204,8 @@ void Send_Measure(void)
     uint32_t chunk_fill = 0;
     uint32_t address = Saved_Bytes;
     uint32_t total_processed = 0;
+
+	HAL_UART_DMAStop(LTE_UART);
 
     while (total_processed < sys.RAM_Buffer_Len) 
 	{
@@ -322,11 +332,25 @@ void Apply_Config(void)
     }
 	else if(strcmp(cfg_var, "SAMP_FREQ") == 0)
 	{
-		config.samp_freq = (uint16_t)atoi(new_cfg_val);
+		if((uint16_t)atoi(new_cfg_val) != 800 && (uint16_t)atoi(new_cfg_val) != 1600)
+		{
+			return;
+		}
+		else
+		{
+			config.samp_freq = (uint16_t)atoi(new_cfg_val);
+		}
 	}
 	else if(strcmp(cfg_var, "BUFFER_SECS") == 0)
 	{
-		config.buffering_secs = (uint8_t)atoi(new_cfg_val);
+		if((uint8_t)atoi(new_cfg_val) < 5 || (uint8_t)atoi(new_cfg_val) > 30)
+		{
+			return;
+		}
+		else
+		{
+			config.buffering_secs = (uint8_t)atoi(new_cfg_val);
+		}
 	}
 	else if(strcmp(cfg_var, "HAMMER_TH") == 0)
 	{
@@ -398,4 +422,14 @@ void Apply_Config(void)
 	memset(cfg_var, 0, sizeof(cfg_var));
 	cfg_idx = 0;
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));	
+}
+
+/*-----AZZERAMENTO FLAG-----*/
+void Clear_Flags(void)
+{
+	memset(&sys, 0, sizeof(sys));
+	if(!sys.ACC_Present)
+	{
+		sys.ACC_Present = 1;
+	}
 }

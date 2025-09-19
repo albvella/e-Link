@@ -1,4 +1,4 @@
 ../Core/Src/init.c:20:6:System_Init	8	static
 ../Core/Src/init.c:46:6:FatFS_Init	32	static
 ../Core/Src/init.c:113:6:Acc_Init	32	static
-../Core/Src/init.c:167:6:Config_Init	4168	static
+../Core/Src/init.c:166:6:Config_Init	4168	static

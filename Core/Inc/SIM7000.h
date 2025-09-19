@@ -19,6 +19,7 @@ void SIM_Send_Command_DMA(char* command);
 void SIM_Receive_Response(char* response);
 int SIM_Check_IP(const char* response);
 int SIM_Check_MQTT_State(const char* response);
+int SIM_Check_TCP_State(const char* response);
 void SIM_Parse_Command(void);
 void SIM_Parse_Cfg(char* cmd_start, char* cmd_end);
 void SIM_publish_MQTT_Message(const char* topic, const char* message);

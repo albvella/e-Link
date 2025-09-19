@@ -1,7 +1,8 @@
 ../Core/Src/process.c:23:6:Save_Data	1240	static
 ../Core/Src/process.c:122:6:Start_Measure	8	static
-../Core/Src/process.c:140:6:Warning_Detection	24	static
-../Core/Src/process.c:170:6:RAM_Save_Measure	24	static
-../Core/Src/process.c:193:6:Send_Measure	1512	static
-../Core/Src/process.c:245:10:Compress_Sample	80	static
-../Core/Src/process.c:314:6:Apply_Config	4160	static
+../Core/Src/process.c:148:6:Warning_Detection	24	static
+../Core/Src/process.c:178:6:RAM_Save_Measure	24	static
+../Core/Src/process.c:201:6:Send_Measure	1512	static
+../Core/Src/process.c:255:10:Compress_Sample	80	static
+../Core/Src/process.c:324:6:Apply_Config	4160	static
+../Core/Src/process.c:428:6:Clear_Flags	8	static

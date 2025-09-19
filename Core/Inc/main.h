@@ -64,15 +64,12 @@ typedef struct {
 	uint8_t ADC_Complete : 1;
 	uint8_t ADC_Half_Buffer : 1;
 	uint8_t ADC_Full_Buffer : 1;
-	uint8_t RAM_Mounted : 1;
-	uint8_t FLASH_Mounted : 1;
 	uint8_t Hammer_Detected : 1;
 	uint8_t Threshold_Detected : 1;
 	uint8_t BC_Interrupt : 1;
-	uint8_t ACC_Present : 1;
 	uint8_t ACC_Complete : 1;
-	uint8_t MQTT_Message_Rx :1;
-    uint8_t MQTT_ReadytoSend :1;
+	uint8_t MQTT_Message_Rx : 1;
+    uint8_t MQTT_ReadytoSend : 1;
     CMD_Typedef CMD;
 } System_Flags_TypeDef;
 
@@ -88,8 +85,16 @@ typedef struct {
 } MQTT_TypeDef;
 
 typedef struct {
+    char IP_address[100];
+    char Port[100];
+} TCP_Typedef;
+
+typedef struct {
     uint8_t file_ota_open;
     FIL file_ota;
+    uint8_t ACC_Present : 1;
+    uint8_t RAM_Mounted : 1;
+	uint8_t FLASH_Mounted : 1;
     uint16_t Low_th;
     uint16_t High_th;
     uint64_t BC_Flags;
@@ -98,6 +103,7 @@ typedef struct {
     uint32_t RAM_Buffer_Len;
     uint32_t SIM_Prompt_Status;
     MQTT_TypeDef MQTT;
+    TCP_Typedef TCP;
 } System_Resources_Typedef;
 
 typedef struct {
