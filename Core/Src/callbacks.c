@@ -60,13 +60,29 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if(huart == LTE_UART && Size > 8)
     {
-        // Check velocissimo: pattern "+SMSUB: " all'inizio buffer
         if(*(uint32_t*)sim_rx_buffer == 0x534D532B &&           // "+SMS"
-           *(uint32_t*)(sim_rx_buffer + 4) == 0x203A4255) {        // "UB: "
+           *(uint32_t*)(sim_rx_buffer + 4) == 0x203A4255) {     // "UB: "
             flags.MQTT_Message_Rx = 1;
         }
 
     }
+	else if(huart == LTE_UART && Size > 0)
+	{
+		if(*(uint8_t*)sim_rx_buffer == '>')
+		{
+			flags.MQTT_ReadytoSend = 1;
+			sys.SIM_Prompt_Status = 0;
+		}
+	}
+	else if(huart == LTE_UART && Size > 4)
+	{
+		if(*(uint32_t*)sim_rx_buffer == 0x4552524F)            //"ERRO"
+		{
+			flags.MQTT_ReadytoSend = 0;
+			flags.CMD.Data_Request = 1;
+			sys.SIM_Prompt_Status = 0;
+		}
+	}
 	
 	HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 }

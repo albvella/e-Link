@@ -14,6 +14,7 @@ int psram_is_initialized();
 int psram_read(uint32_t address, uint32_t nbytes, uint8_t *pBuffer);
 int psram_write(uint32_t address, uint32_t nbytes, uint8_t *pBuffer);
 int RAM_Write(uint32_t address, uint32_t nbytes, uint8_t *pBuffer);
+int RAM_Read(uint32_t address, uint32_t nbytes, uint8_t *pBuffer);
 
 int psram_sector_read_write(uint8_t write, uint32_t sector, uint32_t nsectors, uint8_t *pBuffer);
 

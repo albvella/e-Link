@@ -297,6 +297,12 @@ int RAM_Write(uint32_t address, uint32_t nbytes, uint8_t *pBuffer)
 	return raw_psram_read_write(1, address, nbytes, pBuffer);
 }
 
+int RAM_Read(uint32_t address, uint32_t nbytes, uint8_t *pBuffer)
+{
+	return psram_read_write(0, address, nbytes, pBuffer);
+}
+
+
 int psram_is_initialized()
 {
 	return psramInitDone;

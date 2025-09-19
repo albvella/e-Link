@@ -1,5 +1,7 @@
-../Core/Src/process.c:20:6:Save_Data	9
-../Core/Src/process.c:85:6:Warning_Detection	7
-../Core/Src/process.c:115:6:RAM_Save_Measure	5
-../Core/Src/process.c:154:6:Send_Measure	1
-../Core/Src/process.c:160:6:Apply_Config	15
+../Core/Src/process.c:23:6:Save_Data	14
+../Core/Src/process.c:122:6:Start_Measure	1
+../Core/Src/process.c:140:6:Warning_Detection	7
+../Core/Src/process.c:170:6:RAM_Save_Measure	2
+../Core/Src/process.c:193:6:Send_Measure	6
+../Core/Src/process.c:245:10:Compress_Sample	14
+../Core/Src/process.c:314:6:Apply_Config	21

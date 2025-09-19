@@ -24,20 +24,26 @@
 #define MEASURE_FILE_NAME_1 "/ram/meas1.bin"
 #define MEASURE_FILE_NAME_2 "/ram/meas2.bin"
 
-#define SIM_RXBUFFER_SIZE 1024
-#define ACC_FIFO_WATERMARK 200
-#define PRESS_HALF_SAMPLES ACC_FIFO_WATERMARK * 2
-#define PRESS_FULL_SAMPLES PRESS_HALF_SAMPLES * 2
-#define MAX_VOLUME_LEN 40
-#define ACCELERATION_LEN ACC_FIFO_WATERMARK * 7
-#define SUPPLY_LEN 12
-#define TEMP_LEN 2
+#define SIM_RXBUFFER_SIZE          1024
+#define ACC_FIFO_WATERMARK         200
+#define PRESS_HALF_SAMPLES         ACC_FIFO_WATERMARK
+#define PRESS_FULL_SAMPLES         PRESS_HALF_SAMPLES * 2
+#define MAX_VOLUME_LEN             40
+#define MAX_VOLUME_SAMPLES         MAX_VOLUME_LEN / 2
+#define ACCELERATION_LEN           ACC_FIFO_WATERMARK * 7
+#define SUPPLY_LEN                 12
+#define TEMP_LEN                   2
+#define PRESS_HALF_LEN             PRESS_FULL_SAMPLES
 
-#define LOGGING_BUFFER_LEN PRESS_FULL_SAMPLES + MAX_VOLUME_LEN + ACCELERATION_LEN + SUPPLY_LEN + TEMP_LEN
+#define SAVING_BUFFER_LEN         PRESS_HALF_LEN + MAX_VOLUME_LEN + ACCELERATION_LEN
 
-#define HAMMER_THRESHOLD 2048
+#define SAMPLE_SIZE SAVING_BUFFER_LEN
 
+#define MAX_COMPRESSED_SIZE 1200     // Worst case: poca compressione
+#define METADATA_SIZE 6              // timestamp + compressed_size
+#define MAX_SAMPLE_TOTAL_SIZE (METADATA_SIZE + MAX_COMPRESSED_SIZE)
 
+#define SIM_PROMPT_TIMEOUT_MS 3000
 
 extern Machine_State_TypeDef state;
 extern System_Resources_Typedef sys;
@@ -59,18 +65,19 @@ extern uint16_t Volume_Period[MAX_VOLUME_LEN/2];
 extern uint8_t Acceleration[ACC_FIFO_WATERMARK*7];
 extern uint16_t Last_Pressure;
 extern uint16_t Last_Volume;
-extern uint16_t Last_Acceleration;
+extern Acceleration_Data_TypeDef Last_Acceleration;
 extern uint16_t Temperature;
 
 extern char MQTT_Logging[100];
-extern uint8_t Logging_Buffer[LOGGING_BUFFER_LEN];
+extern uint8_t Saving_Buffer[SAVING_BUFFER_LEN];
 extern int Address_Offset;
 
 extern char LTE_Ack_buffer[100];
 
-extern uint16_t Seconds_After_Warning;
+extern uint16_t Cycles_After_Warning;
 
-extern uint16_t Saves_cnt;
+extern uint32_t Saved_Bytes;
+extern uint16_t Saved_Samples;
 
 extern FRESULT res;
 

@@ -27,9 +27,9 @@ void System_Init(void)
 
 	BC_Init();
 	INA3221_Init();
-	Acc_Init(&acc);
 	FatFS_Init();
 	Config_Init();
+	Acc_Init(&acc);
 	SIM_Init();
 	RTC_Init();
 
@@ -181,6 +181,8 @@ void Config_Init(void)
     }
 
     config.device_id = 0;
+	config.samp_freq = 800;
+	config.buffering_secs = 30;
 	config.hammer_th = 2048;
     for(int i = 0; i < 24; i++) 
 	{

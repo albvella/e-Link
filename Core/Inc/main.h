@@ -43,8 +43,16 @@ typedef enum {
 	SEND_RECORDING_STATE
 } Machine_State_TypeDef;
 
+typedef struct{
+    uint8_t header;
+    uint16_t x;
+    uint16_t y;
+    uint16_t z;
+} Acceleration_Data_TypeDef;
+
 typedef struct {
 	uint8_t Data_Request : 1;
+	uint8_t Measure_Request : 1;
 	uint8_t Start_OTA : 1;
 	uint8_t Ping : 1;
 	uint8_t Set_Config : 1;
@@ -64,6 +72,7 @@ typedef struct {
 	uint8_t ACC_Present : 1;
 	uint8_t ACC_Complete : 1;
 	uint8_t MQTT_Message_Rx :1;
+    uint8_t MQTT_ReadytoSend :1;
     CMD_Typedef CMD;
 } System_Flags_TypeDef;
 
@@ -81,20 +90,20 @@ typedef struct {
 typedef struct {
     uint8_t file_ota_open;
     FIL file_ota;
-    uint32_t file_ota_written;
-    uint8_t file_meas_1_open;
-    FIL file_meas_1;
-    uint8_t file_meas_2_open;
-    FIL file_meas_2;
     uint16_t Low_th;
     uint16_t High_th;
     uint64_t BC_Flags;
     char apn[100];
+    uint32_t RAM_Samples_Number;
+    uint32_t RAM_Buffer_Len;
+    uint32_t SIM_Prompt_Status;
     MQTT_TypeDef MQTT;
 } System_Resources_Typedef;
 
 typedef struct {
     uint8_t device_id;
+    uint16_t samp_freq;
+    uint8_t buffering_secs;
     uint16_t hammer_th;                    
     uint16_t low_th[24];                   
     uint16_t high_th[24];                  
@@ -102,6 +111,12 @@ typedef struct {
     char command_topic[64];                
     char ota_topic[64];                                           
 } Config_Typedef;  
+
+typedef struct {
+    uint32_t timestamp;          
+    uint16_t compressed_size;    
+    uint8_t data[];              
+} __attribute__((packed)) Compressed_Sample_Typedef;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

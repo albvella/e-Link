@@ -85,20 +85,24 @@ uint16_t Read_Temperature(void)
 	uint8_t Temp_LSB = 0;
 	uint8_t Temp_MSB = 0;
 	uint16_t Temp = 0;
-
+	
 	Temp_Sensor_Init();
 	Temp_Sensor_Write(0xCC);  // skip ROM
-	Temp_Sensor_Write(0x44);  // convert t
 
-	Temp_Sensor_Init();
-	Temp_Sensor_Write(0xCC);  // skip ROM
-	Temp_Sensor_Write(0xBE);  // read Scratch-pad
+	uint8_t status = Temp_Sensor_ReadBit();
 
-	Temp_LSB = Temp_Sensor_ReadByte();
-	Temp_MSB = Temp_Sensor_ReadByte();
-
-	Temp = ((Temp_MSB << 8)) | Temp_LSB;
-
-	return Temp;
+	if (status) 
+	{
+		Temp_Sensor_Write(0xBE);  // read Scratch-pad
+		Temp_LSB = Temp_Sensor_ReadByte();
+	    Temp_MSB = Temp_Sensor_ReadByte();
+		Temp_Sensor_Init();
+		Temp_Sensor_Write(0xCC);  // skip ROM
+		Temp_Sensor_Write(0x44);  // convert t
+		Temp = ((Temp_MSB << 8)) | Temp_LSB;
+		return Temp;
+	}
+	
+	return 0; 
 }
 

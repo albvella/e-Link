@@ -9,8 +9,9 @@
 ../Core/Src/psram.c:285:5:psram_read	1
 ../Core/Src/psram.c:290:5:psram_write	1
 ../Core/Src/psram.c:295:5:RAM_Write	1
-../Core/Src/psram.c:300:5:psram_is_initialized	1
-../Core/Src/psram.c:305:14:psram_get_sector_size	1
-../Core/Src/psram.c:310:14:psram_get_sector_count	1
-../Core/Src/psram.c:315:14:psram_get_size	1
-../Core/Src/psram.c:320:5:psram_init	6
+../Core/Src/psram.c:300:5:RAM_Read	1
+../Core/Src/psram.c:306:5:psram_is_initialized	1
+../Core/Src/psram.c:311:14:psram_get_sector_size	1
+../Core/Src/psram.c:316:14:psram_get_sector_count	1
+../Core/Src/psram.c:321:14:psram_get_size	1
+../Core/Src/psram.c:326:5:psram_init	6

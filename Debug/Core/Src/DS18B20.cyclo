@@ -3,4 +3,4 @@
 ../Core/Src/DS18B20.c:34:6:Temp_Sensor_Write	3
 ../Core/Src/DS18B20.c:54:9:Temp_Sensor_ReadByte	3
 ../Core/Src/DS18B20.c:69:9:Temp_Sensor_ReadBit	1
-../Core/Src/DS18B20.c:83:10:Read_Temperature	1
+../Core/Src/DS18B20.c:83:10:Read_Temperature	2
