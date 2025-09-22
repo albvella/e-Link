@@ -43,6 +43,11 @@ typedef enum {
 	SEND_RECORDING_STATE
 } Machine_State_TypeDef;
 
+typedef struct {
+    int16_t previous_value; // Ultimo valore predetto/ricostruito
+    int8_t  step_index;     // Indice nella tabella degli step di quantizzazione
+} AdpcmState_Typedef;
+
 typedef struct{
     uint8_t header;
     uint16_t x;
@@ -82,6 +87,7 @@ typedef struct {
 	char Data_Topic[100];
 	char Command_Topic[100];
 	char OTA_Topic[100];
+    char Info_Topic[100];
 } MQTT_TypeDef;
 
 typedef struct {
@@ -115,12 +121,18 @@ typedef struct {
     uint16_t high_th[24];                  
     char data_topic[64];                   
     char command_topic[64];                
-    char ota_topic[64];                                           
+    char ota_topic[64];   
+    char info_topic[64];                                        
 } Config_Typedef;  
 
-typedef struct {
-    uint32_t timestamp;          
-    uint16_t compressed_size;    
+typedef struct{
+    uint16_t pressure_size;
+    uint16_t volume_size;
+    uint16_t acceleration_size;
+} Compressed_Sizes_Typedef;
+
+typedef struct {       
+    Compressed_Sizes_Typedef compressed_size;    
     uint8_t data[];              
 } __attribute__((packed)) Compressed_Sample_Typedef;
 /* USER CODE END ET */

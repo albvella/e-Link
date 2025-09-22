@@ -130,6 +130,24 @@ char cfg_var[20] = {0};
 int cfg_idx = 0;
 char new_cfg_val[10] = {0};
 
+uint16_t step_size_table_16bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 16 bit
+    7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31,
+    34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143,
+    157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658,
+    724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024,
+    3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
+    15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794
+};
+uint16_t step_size_table_12bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 12 bit
+    1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4,
+    4, 5, 5, 6, 6, 7, 8, 8, 9, 10, 11, 12, 13, 15, 16, 18,
+    20, 22, 24, 26, 29, 32, 35, 38, 42, 46, 51, 56, 62, 68, 75, 83,
+    91, 100, 110, 121, 133, 146, 160, 176, 193, 212, 233, 256, 281, 308, 337, 369,
+    404, 442, 483, 528, 577, 630, 688, 751, 819, 893, 974, 1062, 1157, 1261, 1373, 1499,
+    1629, 1682, 1850, 2035, 2238, 2462, 2709, 2979
+};
+int8_t index_adjustment_table[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -212,90 +230,92 @@ int main(void)
 		switch(state)
 		{
 		case IDLE:
-			if(flags.MQTT_Message_Rx)
-			{
-				SIM_Parse_Command();
-				flags.MQTT_Message_Rx = 0;
-			}
-			if(flags.CMD.Start_Meas)
-			{
-				state = MEASURE_INIT_STATE;
-				flags.CMD.Start_Meas = 0;
-			}
-			else if(flags.CMD.Set_Config)
-			{
-				Apply_Config();
-				flags.CMD.Set_Config = 0;
-			}
-			else if(flags.CMD.Start_OTA)
-			{
-				flags.CMD.Start_OTA = 0;
-			}
-			else if(flags.CMD.Ping)
-			{
-				flags.CMD.Ping = 0;
-			}
-			break;
+        if(flags.MQTT_Message_Rx)
+        {
+            SIM_Parse_Command();
+            flags.MQTT_Message_Rx = 0;
+        }
+        if(flags.CMD.Start_Meas)
+        {
+            state = MEASURE_INIT_STATE;
+            flags.CMD.Start_Meas = 0;
+        }
+        else if(flags.CMD.Set_Config)
+        {
+            Apply_Config();
+            flags.CMD.Set_Config = 0;
+        }
+        else if(flags.CMD.Start_OTA)
+        {
+            flags.CMD.Start_OTA = 0;
+        }
+        else if(flags.CMD.Ping)
+        {
+            SIM_Send_Infos();
+            flags.CMD.Ping = 0;
+        }
+        break;
+
 		case MEASURE_INIT_STATE:
-			Start_Measure();
-			state = MEASURING_STATE;
-			break;
+        Start_Measure();
+        state = MEASURING_STATE;
+        break;
 
 		case MEASURING_STATE:
-			if(flags.ADC_Complete && flags.ACC_Complete)
-			{
-				Save_Data();
-				if(flags.BC_Interrupt)
-				{
-					BC_Read_Flags(&sys.BC_Flags);
-					BC_Manage_Interrupts(sys.BC_Flags);
-					flags.BC_Interrupt = 0;
-				}
-				if(flags.MQTT_Message_Rx)
-				{
-					SIM_Parse_Command();
-					flags.MQTT_Message_Rx = 0;
-				}
-				if(flags.CMD.Data_Request)
-				{
-					sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
-					SIM_publish_MQTT_Message(NULL, MQTT_Logging);
-					sys.SIM_Prompt_Status = HAL_GetTick();
-					flags.CMD.Data_Request = 0;
-				}
-				else if(flags.CMD.Idle)
-				{
-					state = IDLE;
-					flags.CMD.Idle = 0;
-				}
-				else if(flags.CMD.Measure_Request)
-				{
-					state = SEND_RECORDING_STATE;
-					flags.CMD.Measure_Request = 0;
-				}
-				if(flags.MQTT_ReadytoSend)
-				{
-					SIM_Send_Command_DMA(MQTT_Logging);
-					flags.MQTT_ReadytoSend = 0;
-				}
-				if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
-				{
-					SIM_Send_Command_DMA("AT+SMCONN\r");
-					sys.SIM_Prompt_Status = 0;
-				}
-			}
-			break;
+        if(flags.ADC_Complete && flags.ACC_Complete)
+        {
+            Save_Data();
+            if(flags.BC_Interrupt)
+            {
+                BC_Read_Flags(&sys.BC_Flags);
+                BC_Manage_Interrupts(sys.BC_Flags);
+                flags.BC_Interrupt = 0;
+            }
+            if(flags.MQTT_Message_Rx)
+            {
+                SIM_Parse_Command();
+                flags.MQTT_Message_Rx = 0;
+            }
+            if(flags.CMD.Data_Request)
+            {
+                sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+                SIM_publish_MQTT_Message(NULL, MQTT_Logging);
+                sys.SIM_Prompt_Status = HAL_GetTick();
+                flags.CMD.Data_Request = 0;
+            }
+            else if(flags.CMD.Idle)
+            {
+                state = IDLE;
+                flags.CMD.Idle = 0;
+            }
+            else if(flags.CMD.Measure_Request)
+            {
+                state = SEND_RECORDING_STATE;
+                flags.CMD.Measure_Request = 0;
+            }
+            if(flags.MQTT_ReadytoSend)
+            {
+                SIM_Send_Command_DMA(MQTT_Logging);
+                flags.MQTT_ReadytoSend = 0;
+            }
+            if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
+            {
+                SIM_Send_Command_DMA("AT+SMCONN\r");
+                sys.SIM_Prompt_Status = 0;
+            }
+        }
+        break;
 
 		case SEND_RECORDING_STATE:
-			HAL_ADC_Stop_DMA(PRESSURE_ADC);
-			HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
-			Send_Measure();
-      HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
-			state = MEASURE_INIT_STATE;
-			break;
+        HAL_ADC_Stop_DMA(PRESSURE_ADC);
+        HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
+        Send_Measure();
+        HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
+        state = MEASURE_INIT_STATE;
+        break;
 
 		default:
-			break;
+			  break;
 		}
     /* USER CODE END WHILE */
 
@@ -516,7 +536,7 @@ static void MX_QUADSPI_Init(void)
   /* USER CODE END QUADSPI_Init 1 */
   /* QUADSPI parameter configuration*/
   hqspi.Instance = QUADSPI;
-  hqspi.Init.ClockPrescaler = 255;
+  hqspi.Init.ClockPrescaler = 1;
   hqspi.Init.FifoThreshold = 1;
   hqspi.Init.SampleShifting = QSPI_SAMPLE_SHIFTING_NONE;
   hqspi.Init.FlashSize = 1;

@@ -15,6 +15,7 @@
 #include "string.h"
 #include "lsm6dsv16x_reg.h"
 #include "lsm6dsv16x_rw.h"
+#include "DS18B20.h"
 
 /*-----INIZiALIZZAZIONE SISTEMA-----*/
 void System_Init(void)
@@ -32,6 +33,7 @@ void System_Init(void)
 	Acc_Init(&acc);
 	SIM_Init();
 	RTC_Init();
+	Temperature = Read_Temperature();
 
 	HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 
@@ -191,6 +193,7 @@ void Config_Init(void)
     strcpy(config.data_topic, "Data_Topic");
     strcpy(config.command_topic, "Command_Topic");  
     strcpy(config.ota_topic, "OTA_Topic");
+	strcpy(config.info_topic, "Info_Topic");
     
     if (f_open(&config_file, APP_CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
     {

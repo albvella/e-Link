@@ -11,6 +11,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <SIM7000.h>
+#include "battery_charger.h"
+#include "DS18B20.h"
 
 /*------INIZIALIZZAZIONE DEL MODULO LTE------*/
 void SIM_Init(void)
@@ -28,6 +30,7 @@ void SIM_Init(void)
 	strcpy(sys.MQTT.Data_Topic, config.data_topic);
 	strcpy(sys.MQTT.Command_Topic, config.command_topic);
 	strcpy(sys.MQTT.OTA_Topic, config.ota_topic);
+	strcpy(sys.MQTT.Info_Topic, config.info_topic);
 
 	SIM_Power_On();
 	HAL_Delay(5000);
@@ -397,6 +400,31 @@ void SIM_Send_TCP_Chunk(uint8_t* data, uint16_t size)
     HAL_UART_Transmit(LTE_UART, data, size, 1000);             // Invia dati binari
     
     SIM_Wait_Response("SEND OK");                              // Attesa invio avvenuto
+}
+
+/*-----INVIO INFORMAZIONI AL SERVER MQTT-----*/
+void SIM_Send_Infos(void)
+{
+	uint16_t len = 0;
+	char command[128];
+	char infos[512];
+	uint16_t Vbatt = 0;
+	uint16_t new_temp = 0;
+
+	BC_MultiRead_Reg(REG3B_VBAT_ADC, &Vbatt);
+	INA3221_Read_Measure(&Supply);
+	if((new_temp = Read_Temperature()) != 0)
+	{
+		Temperature = new_temp;
+	}
+
+	sprintf(infos, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Vbatt, config.samp_freq, config.buffering_secs, Supply.v1, Supply.v2, Supply.v3, Supply.i1, Supply.i2, Supply.i3, Temperature);
+	len = (uint16_t)strlen(infos);
+
+	sprintf(command, "AT+SMPUB=\"%s\",%d,1,0\r", sys.MQTT.Info_Topic, len);
+	SIM_Wait_Response(">"); 
+	HAL_UART_Transmit(LTE_UART, (uint8_t*)infos, len, 100);
+	SIM_Wait_Response("OK");
 }
 
 /*-----ATTESA PROMPT-----*/

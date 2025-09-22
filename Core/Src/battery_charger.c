@@ -98,7 +98,7 @@ int BC_MultiRead_Reg(uint8_t reg, uint16_t *rdata)
 int BC_Read_Flags(uint64_t *flags)
 {
 	int result = -1;
-	uint64_t data[6] = {0};
+	uint8_t data[6] = {0};
 	uint8_t reg = REG22_CHARGER_FLAG_0;
 
 	if(HAL_I2C_Master_Transmit(I2C, BATTERY_CHARGER_ADDR << 1, &reg, 1, 100) == HAL_OK)
@@ -106,7 +106,7 @@ int BC_Read_Flags(uint64_t *flags)
 		if(HAL_I2C_Master_Receive(I2C,  BATTERY_CHARGER_ADDR << 1 , (uint8_t *)data, 6, 100) == HAL_OK)
 		{
 			result = 0;
-			*flags = (data[0] << 40) | (data[1] << 32) | (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
+			*flags = ((uint64_t)data[0] << 40) | ((uint64_t)data[1] << 32) | ((uint64_t)data[2] << 24) | ((uint64_t)data[3] << 16) | ((uint64_t)data[4] << 8) | (uint64_t)data[5];
 		}
 	}
 
@@ -120,24 +120,29 @@ void BC_Manage_Interrupts(uint64_t flags)
 
 	if((flags & POOR_SOURCE_MASK) != 0)   //INGRESSO NON BUONO
 	{
-
+		// ...gestione evento...
+		BC_Write_Reg(REG22_CHARGER_FLAG_0, (flags >> 40) & 0xFF);
 	}
 
 	if((flags & VAC2_CHANGE_MASK) != 0)  //PANNELLO INSERITO O RIMOSSO
 	{
-		BC_Read_Reg(REG1B_CHARGER_STATUS_0, (uint8_t *)& status);
+		BC_Read_Reg(REG1B_CHARGER_STATUS_0, &status);
 		if((status & VAC2_PRESENT_MASK) != 0)
 		{
-			BC_Write_Reg(REG13_CHARGER_CONTROL_4, 0x80); //INSERITA
+			BC_Write_Reg(REG13_CHARGER_CONTROL_4, 0x80);                //Usa Pannello
 		}
 		else
 		{
-			BC_Write_Reg(REG13_CHARGER_CONTROL_4, 0x40); //RIMOSSA
+			BC_Write_Reg(REG13_CHARGER_CONTROL_4, 0x40);                //Usa Turbina
 		}
+		BC_Write_Reg(REG22_CHARGER_FLAG_0, (flags >> 40) & 0xFF);
 	}
 
 	if((flags & VAC1_CHANGE_MASK) != 0)  //TURBINA INSERITA O RIMOSSA
 	{
-
+		// ...gestione evento...
+		BC_Write_Reg(REG22_CHARGER_FLAG_0, (flags >> 40) & 0xFF);
 	}
+
+	flags = 0;
 }

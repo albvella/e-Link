@@ -88,11 +88,8 @@ void Save_Data(void)
 	}
 
 	uint8_t compressed_data[MAX_COMPRESSED_SIZE];
-    uint32_t compressed_size = Compress_Sample(Saving_Buffer, SAVING_BUFFER_LEN, compressed_data);
-
 	Compressed_Sample_Typedef sample;
-    sample.timestamp = HAL_GetTick();
-    sample.compressed_size = compressed_size;
+    sample.compressed_size = Compress_Sample(Saving_Buffer, SAVING_BUFFER_LEN, compressed_data);
 
 	RAM_Save_Measure(&sample, compressed_data);
 
@@ -177,7 +174,8 @@ void Warning_Detection(uint16_t* Data)
 /*-----SALVATAGGIO MISURA IN RAM-----*/
 void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_data)
 {
-    uint32_t total_size = METADATA_SIZE + sample->compressed_size;
+	uint32_t samples_size = sample->compressed_size.pressure_size + sample->compressed_size.volume_size + sample->compressed_size.acceleration_size;
+    uint32_t total_size = METADATA_SIZE + samples_size;
     uint32_t address = Saved_Bytes;
 
 	if(Saved_Samples >= sys.RAM_Samples_Number) 
@@ -191,7 +189,7 @@ void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_dat
 	RAM_Write(address, METADATA_SIZE, (uint8_t*)sample);
     address += METADATA_SIZE;
 
-	RAM_Write(address, sample->compressed_size, compressed_data);
+	RAM_Write(address, samples_size, compressed_data);
     
     Saved_Bytes += total_size;
 	Saved_Samples++;
@@ -206,14 +204,21 @@ void Send_Measure(void)
     uint32_t total_processed = 0;
 
 	HAL_UART_DMAStop(LTE_UART);
+	__HAL_UART_FLUSH_DRREGISTER(LTE_UART);
+
+	if(address == sys.RAM_Buffer_Len)
+	{
+		address = 0;
+	}
 
     while (total_processed < sys.RAM_Buffer_Len) 
 	{
         Compressed_Sample_Typedef sample_header;
+        uint32_t sample_size = sample_header.compressed_size.pressure_size + sample_header.compressed_size.volume_size + sample_header.compressed_size.acceleration_size;
         RAM_Read(address, METADATA_SIZE, (uint8_t*)&sample_header);
         address += METADATA_SIZE;
 
-        uint32_t sample_total_size = METADATA_SIZE + sample_header.compressed_size;
+        uint32_t sample_total_size = METADATA_SIZE + sample_size;
         uint32_t sample_bytes_left = sample_total_size;
         uint32_t sample_addr = address;
 
@@ -235,7 +240,7 @@ void Send_Measure(void)
             }
         }
 
-        address += sample_header.compressed_size;
+        address += sample_size;
         total_processed += sample_total_size;
 
         if (address >= sys.RAM_Buffer_Len) 
@@ -252,79 +257,147 @@ void Send_Measure(void)
 }
 
 /*-----COMPRESSIONE DATI-----*/
-uint16_t Compress_Sample(uint8_t *input, uint16_t input_len, uint8_t *output)
+Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uint8_t *output)
 {
-    uint16_t out_idx = 0;
+	uint16_t out_idx = 0;
+	uint8_t packed_byte = 0;
+	Compressed_Sizes_Typedef sizes = {0, 0, 0};
 
-    // 1. Pressione: delta + RLE
-    uint16_t *adc = (uint16_t*)input;
-    for (int i = 0; i < PRESS_HALF_SAMPLES;) {
-        int run = 1;
-        while (i + run < PRESS_HALF_SAMPLES && adc[i] == adc[i + run]) run++;
-        if (run > 2) {
-            output[out_idx++] = 0x80; // RLE flag
-            output[out_idx++] = run;
-            output[out_idx++] = adc[i] & 0xFF;
-            output[out_idx++] = adc[i] >> 8;
-            i += run;
-        } else {
-            int16_t delta = adc[i] - (i > 0 ? adc[i-1] : 0);
-            output[out_idx++] = 0x00; // delta flag
-            output[out_idx++] = delta & 0xFF;
-            output[out_idx++] = delta >> 8;
-            i++;
-        }
-    }
+    AdpcmState_Typedef press_state = {0, 0}, flow_state = {0, 0};
+    AdpcmState_Typedef acc_x_state = {0, 0}, acc_y_state = {0, 0}, acc_z_state = {0, 0};
 
-    // 2. Flusso: RLE
-    uint16_t *counter = (uint16_t*)(input + PRESS_HALF_LEN);
-    for (int i = 0; i < MAX_VOLUME_SAMPLES;) {
-        int run = 1;
-        while (i + run < MAX_VOLUME_SAMPLES && counter[i] == counter[i + run]) run++;
-        if (run > 2) {
-            output[out_idx++] = 0x81; // RLE flag
-            output[out_idx++] = run;
-            output[out_idx++] = counter[i] & 0xFF;
-            output[out_idx++] = counter[i] >> 8;
-            i += run;
-        } else {
-            output[out_idx++] = 0x01; // value flag
-            output[out_idx++] = counter[i] & 0xFF;
-            output[out_idx++] = counter[i] >> 8;
-            i++;
-        }
-    }
+	// --- 1. Pressione ---
+	uint16_t *adc = (uint16_t*)input;
+	uint16_t pressure_start = out_idx;
 
-    // 3. Accelerometro: header + delta/RLE per assi
-    uint8_t *accel = input + PRESS_HALF_LEN + MAX_VOLUME_LEN;
-    for (int i = 0; i < ACC_FIFO_WATERMARK; i++) {
-        uint8_t header = accel[i*7];
-        uint16_t x = accel[i*7+1] | (accel[i*7+2] << 8);
-        uint16_t y = accel[i*7+3] | (accel[i*7+4] << 8);
-        uint16_t z = accel[i*7+5] | (accel[i*7+6] << 8);
+	output[out_idx++] = adc[0] & 0xFF;
+	output[out_idx++] = adc[0] >> 8;
+	press_state.previous_value = adc[0];
+	for (int i = 1; i < PRESS_HALF_SAMPLES; i++) 
+	{
+		uint8_t nibble = ADPCM_Compression(adc[i], &press_state, step_size_table_12bit);
+		if (i % 2 != 0) 
+		{
+			packed_byte = nibble;
+		} else 
+		{
+			packed_byte |= (nibble << 4);
+			output[out_idx++] = packed_byte;
+			packed_byte = 0;
+		}
+	}
 
-        // Delta coding per X/Y/Z
-        int16_t dx = x - (i > 0 ? (accel[(i-1)*7+1] | (accel[(i-1)*7+2] << 8)) : 0);
-        int16_t dy = y - (i > 0 ? (accel[(i-1)*7+3] | (accel[(i-1)*7+4] << 8)) : 0);
-        int16_t dz = z - (i > 0 ? (accel[(i-1)*7+5] | (accel[(i-1)*7+6] << 8)) : 0);
+	if (PRESS_HALF_SAMPLES % 2 != 0) 
+	{
+		output[out_idx++] = packed_byte;
+		packed_byte = 0;
+	}
+	sizes.pressure_size = out_idx - pressure_start;
 
-        output[out_idx++] = header;
-        output[out_idx++] = dx & 0xFF;
-        output[out_idx++] = dx >> 8;
-        output[out_idx++] = dy & 0xFF;
-        output[out_idx++] = dy >> 8;
-        output[out_idx++] = dz & 0xFF;
-        output[out_idx++] = dz >> 8;
-    }
+	// --- 2. Flusso ---
+	uint16_t *counter = (uint16_t*)(input + PRESS_HALF_LEN);
+	uint16_t volume_start = out_idx;
 
-    return out_idx;
+	output[out_idx++] = counter[0] & 0xFF;
+	output[out_idx++] = counter[0] >> 8;
+	flow_state.previous_value = counter[0];
+	for (int i = 1; i < MAX_VOLUME_SAMPLES; i++)
+	{
+		uint8_t nibble = ADPCM_Compression(counter[i], &flow_state, step_size_table_16bit);
+		if (i % 2 != 0) 
+		{
+			packed_byte = nibble;
+		} else {
+			packed_byte |= (nibble << 4);
+			output[out_idx++] = packed_byte;
+			packed_byte = 0;
+		}
+	}
+
+	if (MAX_VOLUME_SAMPLES % 2 != 0) 
+	{
+		output[out_idx++] = packed_byte;
+		packed_byte = 0;
+	}
+	sizes.volume_size = out_idx - volume_start;
+
+	// --- 3. Accelerometro (3 canali separati) ---
+	uint8_t *accel = input + PRESS_HALF_LEN + MAX_VOLUME_LEN;
+	uint16_t accel_start = out_idx;
+
+	uint16_t x0 = accel[1] | (accel[2] << 8);
+	uint16_t y0 = accel[3] | (accel[4] << 8);
+	uint16_t z0 = accel[5] | (accel[6] << 8);
+	acc_x_state.previous_value = x0;
+	acc_y_state.previous_value = y0;
+	acc_z_state.previous_value = z0;
+	for(int k=0; k<7; ++k) output[out_idx++] = accel[k];
+	for (int i = 1; i < ACC_FIFO_WATERMARK; i++) 
+	{
+		uint16_t x = accel[i*7+1] | (accel[i*7+2] << 8);
+		uint16_t y = accel[i*7+3] | (accel[i*7+4] << 8);
+		uint16_t z = accel[i*7+5] | (accel[i*7+6] << 8);
+		uint8_t nibble_x = ADPCM_Compression(x, &acc_x_state, step_size_table_16bit);
+		uint8_t nibble_y = ADPCM_Compression(y, &acc_y_state, step_size_table_16bit);
+		uint8_t nibble_z = ADPCM_Compression(z, &acc_z_state, step_size_table_16bit);
+		output[out_idx++] = nibble_x | (nibble_y << 4);
+		output[out_idx++] = nibble_z;
+	}
+	sizes.acceleration_size = out_idx - accel_start;
+
+	return sizes;
 }
+
+/*-----FUNZIONE DI COMPRESSIONE ADPCM-----*/
+uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, uint16_t* step_size_table) 
+{
+    int32_t diff = (int32_t)sample - state->previous_value;
+    uint16_t step = step_size_table[state->step_index];
+    uint8_t nibble = 0;
+
+    if (diff < 0) 
+	{
+        nibble = 8; // Bit di segno
+        diff = -diff;
+    }
+
+    // Calcola il nibble quantizzato
+    uint32_t temp = (uint32_t)diff * 4;
+    if (temp < step) 
+	{
+        nibble |= 0;
+    } 
+	else 
+	{
+        nibble |= (uint8_t)((temp / step > 7) ? 7 : (temp / step));
+    }
+
+    // Ricostruisci il valore per la predizione successiva (usando solo il nibble)
+    int32_t reconstructed_diff = (step * (nibble & 7)) / 4 + step / 8;
+    if (nibble & 8) {
+        reconstructed_diff = -reconstructed_diff;
+    }
+    
+    state->previous_value += reconstructed_diff;
+
+    // Clamp del valore predetto
+    if (state->previous_value > 32767) state->previous_value = 32767;
+    if (state->previous_value < -32768) state->previous_value = -32768;
+
+    // Aggiorna l'indice dello step
+    state->step_index += index_adjustment_table[nibble & 7];
+    if (state->step_index < 0) state->step_index = 0;
+    if (state->step_index > 87) state->step_index = 87;
+
+    return nibble;
+}
+
 
 /*-----APPLICA VALORI CONFIGURAZIONE-----*/
 void Apply_Config(void)
 {
 	FIL config_file;
-	UINT bytes_read;
+	UINT bytes_written;
 	
 	if(strcmp(cfg_var, "DEVICE_ID") == 0) 
 	{
@@ -338,7 +411,10 @@ void Apply_Config(void)
 		}
 		else
 		{
-			config.samp_freq = (uint16_t)atoi(new_cfg_val);
+			if(((config.samp_freq / ACC_FIFO_WATERMARK) * config.buffering_secs * SAVING_BUFFER_LEN) * 2 > psram_get_size()) 
+			{
+				config.samp_freq = (uint16_t)atoi(new_cfg_val);
+			}
 		}
 	}
 	else if(strcmp(cfg_var, "BUFFER_SECS") == 0)
@@ -349,7 +425,10 @@ void Apply_Config(void)
 		}
 		else
 		{
-			config.buffering_secs = (uint8_t)atoi(new_cfg_val);
+			if(((config.samp_freq / ACC_FIFO_WATERMARK) * config.buffering_secs * SAVING_BUFFER_LEN) * 2 > psram_get_size()) 
+			{
+				config.buffering_secs = (uint8_t)atoi(new_cfg_val);
+			}
 		}
 	}
 	else if(strcmp(cfg_var, "HAMMER_TH") == 0)
@@ -382,6 +461,12 @@ void Apply_Config(void)
         config.command_topic[sizeof(config.command_topic) - 1] = '\0';
 		strcpy(sys.MQTT.Command_Topic, config.command_topic);
     }
+	else if(strcmp(cfg_var, "INFO_TOPIC") == 0)
+	{
+		strncpy(config.info_topic, new_cfg_val, sizeof(config.info_topic) - 1);
+		config.info_topic[sizeof(config.info_topic) - 1] = '\0';
+		strcpy(sys.MQTT.Info_Topic, config.info_topic);
+	}
 	else if(strcmp(cfg_var, "OTA_TOPIC") == 0)
 	{
 		strncpy(config.ota_topic, new_cfg_val, sizeof(config.ota_topic) - 1);
@@ -393,32 +478,16 @@ void Apply_Config(void)
 		return;
 	}
 
-	if(((config.samp_freq / ACC_FIFO_WATERMARK) * config.buffering_secs * SAVING_BUFFER_LEN) * 2 > psram_get_size()) 
+	if (f_open(&config_file, APP_CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK)
 	{
-		if(config.samp_freq > 1600)
-		{
-			config.samp_freq = 1600;
-		}
-		else if(config.buffering_secs > 30)
-		{
-			config.buffering_secs = 30;
-		}
+		f_write(&config_file, &config, sizeof(config), &bytes_written);
+		f_close(&config_file);
 	}
-
-	if (f_open(&config_file, APP_CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) 
+	else
 	{
 		return;
 	}
-
-	if (f_open(&config_file, APP_CONFIG_FILE, FA_READ) == FR_OK) 
-	{
-		if (f_read(&config_file, &config, sizeof(config), &bytes_read) == FR_OK && bytes_read == sizeof(config))
-		{
-			f_close(&config_file);
-			return;
-		}
-		f_close(&config_file);
-	}
+	
 	memset(cfg_var, 0, sizeof(cfg_var));
 	cfg_idx = 0;
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));	

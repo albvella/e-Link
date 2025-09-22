@@ -97,5 +97,9 @@ extern char cfg_var[20];
 extern int cfg_idx;
 extern char new_cfg_val[10];
 
+extern uint16_t step_size_table_16bit[88];
+extern uint16_t step_size_table_12bit[88];
+extern int8_t index_adjustment_table[8];
+
 
 #endif /* INC_GLOBAL_VARIABLES_H_ */
