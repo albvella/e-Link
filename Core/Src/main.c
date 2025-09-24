@@ -111,12 +111,14 @@ uint16_t Cycles_After_Warning = 0;
 
 uint32_t Saved_Bytes = 0;
 uint16_t Saved_Samples = 0;
+uint32_t Send_Measure_Addr = 0;
+uint8_t tcp_chunk[1460] = {0};
 
 FRESULT res;
 
 uint16_t Hammer_Th = 0;
-uint16_t High_TH[24] = {0};
-uint16_t Low_TH[24] = {0};
+uint16_t High_TH_Array[24] = {0};
+uint16_t Low_TH_Array[24] = {0};
 
 stmdev_ctx_t acc;
 lsm6dsv16x_fifo_status_t fifo_status;
@@ -247,6 +249,7 @@ int main(void)
         }
         else if(flags.CMD.Start_OTA)
         {
+            state = OTA_STATE;
             flags.CMD.Start_OTA = 0;
         }
         else if(flags.CMD.Ping)
@@ -257,8 +260,8 @@ int main(void)
         break;
 
 		case MEASURE_INIT_STATE:
-        Start_Measure();
-        state = MEASURING_STATE;
+			Start_Measure();
+			state = MEASURING_STATE;
         break;
 
 		case MEASURING_STATE:
@@ -286,12 +289,27 @@ int main(void)
             else if(flags.CMD.Idle)
             {
                 state = IDLE;
+                HAL_ADC_Stop_DMA(PRESSURE_ADC);
+                HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
                 flags.CMD.Idle = 0;
             }
             else if(flags.CMD.Measure_Request)
             {
-                state = SEND_RECORDING_STATE;
-                flags.CMD.Measure_Request = 0;
+                if(!flags.TCP_isSending)
+                {
+                    Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
+                    if(flags.TCP_ReadytoSend)
+                    {
+                        SIM_Send_Command_DMA(MQTT_Logging);
+                        flags.TCP_isSending = 1;
+                        flags.TCP_ReadytoSend = 0;
+                        if (Send_Measure_Addr == 0) 
+                        {
+                            memset(tcp_chunk, 0, 1460);
+                            flags.CMD.Measure_Request = 0;
+                        }
+                    }
+                }
             }
             if(flags.MQTT_ReadytoSend)
             {
@@ -306,12 +324,7 @@ int main(void)
         }
         break;
 
-		case SEND_RECORDING_STATE:
-        HAL_ADC_Stop_DMA(PRESSURE_ADC);
-        HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
-        Send_Measure();
-        HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
-        state = MEASURE_INIT_STATE;
+		case OTA_STATE:
         break;
 
 		default:

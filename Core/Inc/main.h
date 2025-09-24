@@ -40,7 +40,7 @@ typedef enum {
     IDLE,
 	MEASURE_INIT_STATE,
 	MEASURING_STATE,
-	SEND_RECORDING_STATE
+	OTA_STATE
 } Machine_State_TypeDef;
 
 typedef struct {
@@ -75,6 +75,8 @@ typedef struct {
 	uint8_t ACC_Complete : 1;
 	uint8_t MQTT_Message_Rx : 1;
     uint8_t MQTT_ReadytoSend : 1;
+    uint8_t TCP_ReadytoSend : 1;
+    uint8_t TCP_isSending : 1;
     CMD_Typedef CMD;
 } System_Flags_TypeDef;
 
@@ -106,7 +108,11 @@ typedef struct {
     uint64_t BC_Flags;
     char apn[100];
     uint32_t RAM_Samples_Number;
-    uint32_t RAM_Buffer_Len;
+    uint8_t Active_RAM_Buffer;
+    uint32_t Current_RAM_Base;
+    uint32_t Current_RAM_Len;
+    uint32_t RAM_Buffer_Base_tosend;
+    uint32_t Inactive_RAM_Len;
     uint32_t SIM_Prompt_Status;
     MQTT_TypeDef MQTT;
     TCP_Typedef TCP;

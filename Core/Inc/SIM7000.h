@@ -24,6 +24,7 @@ void SIM_Parse_Command(void);
 void SIM_Parse_Cfg(char* cmd_start, char* cmd_end);
 void SIM_publish_MQTT_Message(const char* topic, const char* message);
 void SIM_Send_TCP_Chunk(uint8_t* data, uint16_t size);
+void SIM_Send_TCP_Chunk_DMA(uint8_t* data, uint16_t size);
 void SIM_Send_Infos(void);
 void SIM_Wait_Response(const char* expected);
 #endif /* INC_SIM7000_H_ */

@@ -37,13 +37,16 @@
 
 #define SAVING_BUFFER_LEN         PRESS_HALF_LEN + MAX_VOLUME_LEN + ACCELERATION_LEN
 
-#define SAMPLE_SIZE SAVING_BUFFER_LEN
+#define SAMPLE_SIZE               SAVING_BUFFER_LEN
 
-#define MAX_COMPRESSED_SIZE 1200     // Worst case: poca compressione
-#define METADATA_SIZE 6              // timestamp + compressed_size
-#define MAX_SAMPLE_TOTAL_SIZE (METADATA_SIZE + MAX_COMPRESSED_SIZE)
+#define MAX_COMPRESSED_SIZE       1200
+#define METADATA_SIZE             6
+
+#define RAM_FIRST_BUFFER_ADD      0
+#define RAM_SECOND_BUFFER_ADD     0x400000
 
 #define SIM_PROMPT_TIMEOUT_MS 3000
+
 
 extern Machine_State_TypeDef state;
 extern System_Resources_Typedef sys;
@@ -78,12 +81,14 @@ extern uint16_t Cycles_After_Warning;
 
 extern uint32_t Saved_Bytes;
 extern uint16_t Saved_Samples;
+extern uint32_t Send_Measure_Addr;
+extern uint8_t tcp_chunk[1460];
 
 extern FRESULT res;
 
 extern uint16_t Hammer_Th;
-extern uint16_t High_TH[24];
-extern uint16_t Low_TH[24];
+extern uint16_t High_TH_Array[24];
+extern uint16_t Low_TH_Array[24];
 
 extern stmdev_ctx_t acc;
 extern lsm6dsv16x_fifo_status_t fifo_status;

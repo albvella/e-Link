@@ -13,6 +13,7 @@
 #include <SIM7000.h>
 #include "battery_charger.h"
 #include "DS18B20.h"
+#include "process.h"
 
 /*------INIZIALIZZAZIONE DEL MODULO LTE------*/
 void SIM_Init(void)
@@ -302,7 +303,12 @@ void SIM_Parse_Command(void)
 								flags.CMD.Data_Request = 1; 
 								break;
 							case 0x52534D: // MSR
-								flags.CMD.Measure_Request = 1; 
+								if(!flags.CMD.Measure_Request)
+								{
+									Send_Measure_Addr = Saved_Bytes;
+									flags.CMD.Measure_Request = 1; 
+									Switch_Buffer();
+								}
 								break;
                             case 0x41544F: // OTA
 								if(state == IDLE)
@@ -394,6 +400,21 @@ void SIM_Send_TCP_Chunk(uint8_t* data, uint16_t size)
 
     sprintf(cmd, "AT+CIPSEND=%u\r", size);
     SIM_Send_Command(cmd);
+
+    SIM_Wait_Response(">");                                    // Attesa prompt '>'
+
+    HAL_UART_Transmit(LTE_UART, data, size, 1000);             // Invia dati binari
+    
+    SIM_Wait_Response("SEND OK");                              // Attesa invio avvenuto
+}
+
+/*-----INVIO DATI AL SERVER TCP CON DMA-----*/
+void SIM_Send_TCP_Chunk_DMA(uint8_t* data, uint16_t size)
+{
+    char cmd[50];
+
+    sprintf(cmd, "AT+CIPSEND=%u\r", size);
+    SIM_Send_Command_DMA(cmd);
 
     SIM_Wait_Response(">");                                    // Attesa prompt '>'
 

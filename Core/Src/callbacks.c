@@ -58,28 +58,36 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 /* ------CALLBACK UART RX IDLE------*/
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    if(huart == LTE_UART && Size > 8)
-    {
-        if(*(uint32_t*)sim_rx_buffer == 0x534D532B &&           // "+SMS"
-           *(uint32_t*)(sim_rx_buffer + 4) == 0x203A4255) {     // "UB: "
-            flags.MQTT_Message_Rx = 1;
-        }
-
-    }
-	else if(huart == LTE_UART && Size > 0)
+	if(huart == LTE_UART)
 	{
 		if(*(uint8_t*)sim_rx_buffer == '>')
 		{
-			flags.MQTT_ReadytoSend = 1;
-			sys.SIM_Prompt_Status = 0;
+			if(flags.CMD.Measure_Request)
+			{
+				flags.TCP_ReadytoSend = 1;
+			}
+			else if(flags.CMD.Data_Request)
+			{
+				flags.MQTT_ReadytoSend = 1;
+				sys.SIM_Prompt_Status = 0;
+			}
 		}
-	}
-	else if(huart == LTE_UART && Size > 4)
-	{
-		if(*(uint32_t*)sim_rx_buffer == 0x4552524F)            //"ERRO"
+
+		else if(*(uint32_t*)sim_rx_buffer == 0x534D532B &&           // "+SMS"
+				*(uint32_t*)(sim_rx_buffer + 4) == 0x203A4255)       // "UB: "
+		{     
+			flags.MQTT_Message_Rx = 1;
+		}
+
+		else if(*(uint32_t*)sim_rx_buffer == 0x444E4553 &&           // "SEND"
+       			*(uint32_t*)(sim_rx_buffer + 4) == 0x004B204F)       // " OK\0"
+		{
+			flags.TCP_isSending = 0;
+		}
+
+		else if(*(uint32_t*)sim_rx_buffer == 0x4552524F)            //"ERRO"
 		{
 			flags.MQTT_ReadytoSend = 0;
-			flags.CMD.Data_Request = 1;
 			sys.SIM_Prompt_Status = 0;
 		}
 	}
@@ -135,8 +143,8 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 
 	HAL_RTC_GetTime(hrtc, &gTime, RTC_FORMAT_BIN);
 
-	sys.Low_th = Low_TH[gTime.Hours];
-	sys.High_th = High_TH[gTime.Hours];
+	sys.Low_th = Low_TH_Array[gTime.Hours];
+	sys.High_th = High_TH_Array[gTime.Hours];
 
 	sAlarm.AlarmTime.Hours = 0;
     sAlarm.AlarmTime.Minutes = 0;

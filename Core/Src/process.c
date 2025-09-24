@@ -91,7 +91,9 @@ void Save_Data(void)
 	Compressed_Sample_Typedef sample;
     sample.compressed_size = Compress_Sample(Saving_Buffer, SAVING_BUFFER_LEN, compressed_data);
 
+	__disable_irq();
 	RAM_Save_Measure(&sample, compressed_data);
+	__enable_irq();
 
 	Address_Offset = 0;
 
@@ -100,26 +102,67 @@ void Save_Data(void)
 		Cycles_After_Warning++;
 		if(Cycles_After_Warning >= config.buffering_secs * (config.samp_freq / ACC_FIFO_WATERMARK))
 		{
-			state = SEND_RECORDING_STATE;
-			Cycles_After_Warning = 0;
-			if(flags.Hammer_Detected)
+			if(!flags.CMD.Measure_Request)
 			{
-				flags.Hammer_Detected = 0;
-			}
-			if(flags.Threshold_Detected)
-			{
-				flags.Threshold_Detected = 0;
+				Switch_Buffer();
+				flags.CMD.Measure_Request = 1;
+				Send_Measure_Addr = Saved_Bytes;
+				Cycles_After_Warning = 0;
+				if(flags.Hammer_Detected)
+				{
+					flags.Hammer_Detected = 0;
+				}
+				if(flags.Threshold_Detected)
+				{
+					flags.Threshold_Detected = 0;
+				}
 			}
 		}
 	}
 
 }
 
+/*-----CAMBIO BUFFER-----*/
+void Switch_Buffer(void)
+{
+    sys.Inactive_RAM_Len = sys.Current_RAM_Len;
+
+    if (sys.Active_RAM_Buffer == 0) 
+	{
+		sys.RAM_Buffer_Base_tosend = RAM_SECOND_BUFFER_ADD;
+        sys.Active_RAM_Buffer = 1;
+        sys.Current_RAM_Base = RAM_SECOND_BUFFER_ADD;
+    } 
+	else 
+	{
+		sys.RAM_Buffer_Base_tosend = RAM_FIRST_BUFFER_ADD;
+        sys.Active_RAM_Buffer = 0;
+        sys.Current_RAM_Base = RAM_FIRST_BUFFER_ADD;
+    }
+
+    sys.Current_RAM_Len = 0;
+}
+
+/*-----CANCELLAZIONE DATI RAM-----*/
+void Erase_RAM_Data(void)
+{
+	uint8_t zero_buffer[1024] = {0};
+	for (uint32_t addr = 0; addr < 0x800000; addr += sizeof(zero_buffer)) 
+	{
+		RAM_Write(addr, sizeof(zero_buffer), zero_buffer);
+	}
+}
+
+
 /*-----AVVIO MISURA-----*/
 void Start_Measure(void)
 {
+	Erase_RAM_Data();
 	sys.RAM_Samples_Number = (config.samp_freq / ACC_FIFO_WATERMARK) * config.buffering_secs * 2;
-	sys.RAM_Buffer_Len = 0;
+	sys.Active_RAM_Buffer = 0;
+	sys.Inactive_RAM_Len = 0;
+	sys.Current_RAM_Base = RAM_FIRST_BUFFER_ADD;
+	sys.Current_RAM_Len = 0;
 	memset(Pressure, 0, sizeof(Pressure));
 	memset(Volume_Period, 0, sizeof(Volume_Period));
 	memset(Acceleration, 0, sizeof(Acceleration));
@@ -174,16 +217,18 @@ void Warning_Detection(uint16_t* Data)
 /*-----SALVATAGGIO MISURA IN RAM-----*/
 void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_data)
 {
-	uint32_t samples_size = sample->compressed_size.pressure_size + sample->compressed_size.volume_size + sample->compressed_size.acceleration_size;
+    uint32_t samples_size = sample->compressed_size.pressure_size +
+                            sample->compressed_size.volume_size +
+                            sample->compressed_size.acceleration_size;
     uint32_t total_size = METADATA_SIZE + samples_size;
-    uint32_t address = Saved_Bytes;
+    uint32_t address = sys.Current_RAM_Base + sys.Current_RAM_Len;
 
 	if(Saved_Samples >= sys.RAM_Samples_Number) 
 	{
-		sys.RAM_Buffer_Len = Saved_Bytes;
+		sys.Current_RAM_Len = Saved_Bytes;
 		Saved_Bytes = 0;
 		Saved_Samples = 0;
-		address = 0;
+		address = sys.Current_RAM_Base;
     }
 
 	RAM_Write(address, METADATA_SIZE, (uint8_t*)sample);
@@ -195,65 +240,79 @@ void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_dat
 	Saved_Samples++;
 }
 
-/*-----INVIO MISURA COMPLETA-----*/
-void Send_Measure(void)
+/*-----INVIO CHUNK MISURA-----*/
+uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t start_address)
 {
-    uint8_t tcp_chunk[1460];
     uint32_t chunk_fill = 0;
-    uint32_t address = Saved_Bytes;
-    uint32_t total_processed = 0;
+    uint32_t address = start_address;
+    uint32_t end_address = start_address; // Per fermarsi quando si torna al punto di partenza
+    uint8_t first_loop = 1;
 
-	HAL_UART_DMAStop(LTE_UART);
-	__HAL_UART_FLUSH_DRREGISTER(LTE_UART);
-
-	if(address == sys.RAM_Buffer_Len)
+    if (buffer_len == 0) 
 	{
-		address = 0;
-	}
-
-    while (total_processed < sys.RAM_Buffer_Len) 
-	{
-        Compressed_Sample_Typedef sample_header;
-        uint32_t sample_size = sample_header.compressed_size.pressure_size + sample_header.compressed_size.volume_size + sample_header.compressed_size.acceleration_size;
-        RAM_Read(address, METADATA_SIZE, (uint8_t*)&sample_header);
-        address += METADATA_SIZE;
-
-        uint32_t sample_total_size = METADATA_SIZE + sample_size;
-        uint32_t sample_bytes_left = sample_total_size;
-        uint32_t sample_addr = address;
-
-        while (sample_bytes_left > 0) 
-		{
-            uint32_t chunk_space = sizeof(tcp_chunk) - chunk_fill;
-            uint32_t bytes_to_copy = (sample_bytes_left < chunk_space) ? sample_bytes_left : chunk_space;
-
-            RAM_Read(sample_addr, bytes_to_copy, tcp_chunk + chunk_fill);
-
-            chunk_fill += bytes_to_copy;
-            sample_addr += bytes_to_copy;
-            sample_bytes_left -= bytes_to_copy;
-
-            if (chunk_fill == sizeof(tcp_chunk)) 
-			{
-                SIM_Send_TCP_Chunk(tcp_chunk, sizeof(tcp_chunk));
-                chunk_fill = 0;
-            }
-        }
-
-        address += sample_size;
-        total_processed += sample_total_size;
-
-        if (address >= sys.RAM_Buffer_Len) 
-		{
-            address = 0;
-        }
+        return 0;
     }
 
-    // Invia ultimo chunk parziale
+    do {
+        // Gestione wrap-around circolare
+        if (address >= buffer_base + buffer_len) 
+		{
+            address = buffer_base;
+        }
+
+        // Controlla se c'è spazio per i metadata
+        if ((buffer_base + buffer_len - address) < METADATA_SIZE && address < buffer_base + buffer_len) 
+		{
+            break;
+        }
+        if ((chunk_fill + METADATA_SIZE) > sizeof(tcp_chunk)) 
+		{
+            break;
+        }
+
+        // Leggi header sample
+        Compressed_Sample_Typedef sample_header;
+        RAM_Read(address, METADATA_SIZE, (uint8_t*)&sample_header);
+
+        uint32_t sample_size = sample_header.compressed_size.pressure_size +
+                               sample_header.compressed_size.volume_size +
+                               sample_header.compressed_size.acceleration_size;
+        uint32_t sample_total_size = METADATA_SIZE + sample_size;
+
+        if ((chunk_fill + sample_total_size) > sizeof(tcp_chunk)) 
+		{
+            break;
+        }
+
+        RAM_Read(address, METADATA_SIZE, tcp_chunk + chunk_fill);
+        chunk_fill += METADATA_SIZE;
+        address += METADATA_SIZE;
+        if (address >= buffer_base + buffer_len) address = buffer_base;
+
+        RAM_Read(address, sample_size, tcp_chunk + chunk_fill);
+        chunk_fill += sample_size;
+        address += sample_size;
+        if (address >= buffer_base + buffer_len) address = buffer_base;
+
+        // Fermati se hai completato il giro
+        if (address == end_address && !first_loop) 
+		{
+            break;
+        }
+        first_loop = 0;
+    } while (1);
+
     if (chunk_fill > 0) 
 	{
-        SIM_Send_TCP_Chunk(tcp_chunk, chunk_fill);
+        SIM_Send_TCP_Chunk_DMA(tcp_chunk, chunk_fill);
     }
+
+    // Se hai completato il giro, ritorna 0
+    if (address == end_address) 
+	{
+        return 0;
+    }
+    return address;
 }
 
 /*-----COMPRESSIONE DATI-----*/
