@@ -179,9 +179,19 @@ void Start_Measure(void)
 	ACC_TIMER->Instance->ARR = (uint32_t)(config.samp_freq / 25) - 1;
 	ACC_TIMER->Instance->CCR3 = (uint32_t)((ACC_TIMER->Instance->ARR + 1) / 2);
 
+	HAL_TIM_IC_Start_IT(VOLUME_TIMER, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(ACC_TIMER, TIM_CHANNEL_3);
 	HAL_ADC_Start_DMA(PRESSURE_ADC, (uint32_t*)&Pressure, PRESS_FULL_SAMPLES);
 	HAL_TIM_OC_Start_IT(ADC_TIMER, TIM_CHANNEL_3);
+}
+
+/*-----FINE MISURA-----*/
+void Stop_Measure(void)
+{
+	HAL_ADC_Stop_DMA(PRESSURE_ADC);
+	HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
+	HAL_TIM_PWM_Stop(ACC_TIMER, TIM_CHANNEL_3);
+	HAL_TIM_IC_Stop_IT(VOLUME_TIMER, TIM_CHANNEL_1);
 }
 
 /*-----DETECTION COLPO D'ARIETE-----*/
@@ -353,31 +363,34 @@ Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uin
 	}
 	sizes.pressure_size = out_idx - pressure_start;
 
-	// --- 2. Flusso ---
-	uint16_t *counter = (uint16_t*)(input + PRESS_HALF_LEN);
+	// --- 2. Flusso (RLE) ---
+	uint32_t *counter = (uint32_t*)(input + PRESS_HALF_LEN);
 	uint16_t volume_start = out_idx;
 
-	output[out_idx++] = counter[0] & 0xFF;
-	output[out_idx++] = counter[0] >> 8;
-	flow_state.previous_value = counter[0];
-	for (int i = 1; i < MAX_VOLUME_SAMPLES; i++)
-	{
-		uint8_t nibble = ADPCM_Compression(counter[i], &flow_state, step_size_table_16bit);
-		if (i % 2 != 0) 
-		{
-			packed_byte = nibble;
+	uint32_t prev = counter[0];
+	uint16_t run_len = 1;
+
+	for (int i = 1; i < MAX_VOLUME_SAMPLES; i++) {
+		if (counter[i] == prev && run_len < 255) {
+			run_len++;
 		} else {
-			packed_byte |= (nibble << 4);
-			output[out_idx++] = packed_byte;
-			packed_byte = 0;
+			// Scrivi valore e run_len (4 byte valore + 1 byte run_len)
+			output[out_idx++] = prev & 0xFF;
+			output[out_idx++] = (prev >> 8) & 0xFF;
+			output[out_idx++] = (prev >> 16) & 0xFF;
+			output[out_idx++] = (prev >> 24) & 0xFF;
+			output[out_idx++] = run_len;
+			prev = counter[i];
+			run_len = 1;
 		}
 	}
+	// Scrivi l'ultimo run
+	output[out_idx++] = prev & 0xFF;
+	output[out_idx++] = (prev >> 8) & 0xFF;
+	output[out_idx++] = (prev >> 16) & 0xFF;
+	output[out_idx++] = (prev >> 24) & 0xFF;
+	output[out_idx++] = run_len;
 
-	if (MAX_VOLUME_SAMPLES % 2 != 0) 
-	{
-		output[out_idx++] = packed_byte;
-		packed_byte = 0;
-	}
 	sizes.volume_size = out_idx - volume_start;
 
 	// --- 3. Accelerometro (3 canali separati) ---
@@ -550,6 +563,69 @@ void Apply_Config(void)
 	memset(cfg_var, 0, sizeof(cfg_var));
 	cfg_idx = 0;
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));	
+}
+
+/*-----RECUPERO E INVIO VALORE DI CONFIGURAZIONE-----*/
+void Get_Config(void)
+{
+	char value_str[128] = {0};
+	const char* topic = sys.MQTT.Info_Topic;
+
+	if(strcmp(cfg_var, "DEVICE_ID") == 0)
+	{
+		sprintf(value_str, "%u", config.device_id);
+	}
+	else if(strcmp(cfg_var, "SAMP_FREQ") == 0)
+	{
+		sprintf(value_str, "%u", config.samp_freq);
+	}
+	else if(strcmp(cfg_var, "BUFFER_SECS") == 0)
+	{
+		sprintf(value_str, "%u", config.buffering_secs);
+	}
+	else if(strcmp(cfg_var, "HAMMER_TH") == 0)
+	{
+		sprintf(value_str, "%u", config.hammer_th);
+	}
+	else if(strcmp(cfg_var, "HIGH_TH") == 0 && cfg_idx >= 0 && cfg_idx < 24)
+	{
+		sprintf(value_str, "%u", config.high_th[cfg_idx]);
+	}
+	else if(strcmp(cfg_var, "LOW_TH") == 0 && cfg_idx >= 0 && cfg_idx < 24)
+	{
+		sprintf(value_str, "%u", config.low_th[cfg_idx]);
+	}
+	else if(strcmp(cfg_var, "DATA_TOPIC") == 0)
+	{
+		strncpy(value_str, config.data_topic, sizeof(value_str)-1);
+	}
+	else if(strcmp(cfg_var, "CMD_TOPIC") == 0)
+	{
+		strncpy(value_str, config.command_topic, sizeof(value_str)-1);
+	}
+	else if(strcmp(cfg_var, "INFO_TOPIC") == 0)
+	{
+		strncpy(value_str, config.info_topic, sizeof(value_str)-1);
+	}
+	else if(strcmp(cfg_var, "OTA_TOPIC") == 0)
+	{
+		strncpy(value_str, config.ota_topic, sizeof(value_str)-1);
+	}
+	else
+	{
+		strncpy(value_str, "UNKNOWN", sizeof(value_str)-1);
+	}
+
+	memset(cfg_var, 0, sizeof(cfg_var));
+	cfg_idx = 0;
+	memset(new_cfg_val, 0, sizeof(new_cfg_val));	
+
+	SIM_publish_MQTT_Message(topic, value_str);
+	SIM_Wait_Response(">");                       
+
+    HAL_UART_Transmit(LTE_UART, value_str, strlen(value_str), 1000);
+
+    SIM_Wait_Response("OK");
 }
 
 /*-----AZZERAMENTO FLAG-----*/

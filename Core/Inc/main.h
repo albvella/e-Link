@@ -61,6 +61,7 @@ typedef struct {
 	uint8_t Start_OTA : 1;
 	uint8_t Ping : 1;
 	uint8_t Set_Config : 1;
+    uint8_t Get_Config : 1;
 	uint8_t Start_Meas : 1;
 	uint8_t Idle : 1;
 } CMD_Typedef;

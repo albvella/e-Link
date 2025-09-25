@@ -26,7 +26,7 @@ class eLink_Decompress_Measure:
             offset += accel_size
             # Decomprimi
             pressure = self._adpcm_decompress(pressure_bytes, 12)
-            flow = self._adpcm_decompress(flow_bytes, 16)
+            flow = self._rle_decompress_flow(flow_bytes)
             ax, ay, az = self._adpcm_decompress_accel(accel_bytes)
             self.measures.append({
                 'pressure': pressure,
@@ -35,6 +35,17 @@ class eLink_Decompress_Measure:
                 'ay': ay,
                 'az': az
             })
+
+    def _rle_decompress_flow(self, comp_bytes: bytes) -> List[int]:
+            # Decompressione RLE per dati di flusso (uint32_t)
+            out = []
+            idx = 0
+            while idx + 5 <= len(comp_bytes):
+                value = struct.unpack_from('<I', comp_bytes, idx)[0]
+                run_len = comp_bytes[idx+4]
+                out.extend([value] * run_len)
+                idx += 5
+            return out
 
     def _adpcm_decompress(self, comp_bytes: bytes, bits: int) -> List[int]:
         # Decompressione ADPCM generica (pressione/volume)

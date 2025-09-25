@@ -322,6 +322,12 @@ void SIM_Parse_Command(void)
 									flags.CMD.Set_Config = 1;
 									SIM_Parse_Cfg(cmd_pos, fourth_quote);
 								}
+							case 0x544547: // GET
+								if(state == IDLE)
+								{
+									flags.CMD.Get_Config = 1;
+									SIM_Get_Cfg(cmd_pos, fourth_quote);
+								}
 							case 0x545352: // RST
 								HAL_NVIC_SystemReset();
 								break;
@@ -373,6 +379,34 @@ void SIM_Parse_Cfg(char* cmd_start, char* cmd_end)
         strncpy(new_cfg_val, comma3 + 1, val_len);
         new_cfg_val[val_len] = '\0';
     }
+}
+
+/*-----RECUPERO VALORE DI CONFIGURAZIONE-----*/
+void SIM_Get_Cfg(char* cmd_start, char* cmd_end)
+{   
+	memset(cfg_var, 0, sizeof(cfg_var));
+	memset(new_cfg_val, 0, sizeof(new_cfg_val));
+	
+	char* pos = cmd_start + 4; // Salta "GET,"
+	
+	// Prima virgola (dopo GET)
+	char* comma1 = strchr(pos, ',');
+	if(!comma1 || comma1 >= cmd_end) return;
+	
+	// Seconda virgola
+	char* comma2 = strchr(comma1 + 1, ',');
+	if(!comma2 || comma2 >= cmd_end) return;
+	
+	// Estrai cfg_var (tra GET, e prima virgola)
+	int var_len = comma2 - comma1 - 1;
+	if(var_len > 0 && var_len < sizeof(cfg_var)) 
+	{
+		strncpy(cfg_var, comma1 + 1, var_len);
+		cfg_var[var_len] = '\0';
+	}
+	
+	// Estrai cfg_idx
+	cfg_idx = atoi(comma2 + 1);
 }
 
 /*------PUBBLICAZIONE MESSAGGIO MQTT------*/

@@ -94,7 +94,7 @@ supply_bus_t Supply = {0};
 uint8_t Period_cnt = 0;
 
 uint16_t Pressure[PRESS_FULL_SAMPLES] = {0};
-uint16_t Volume_Period[MAX_VOLUME_LEN/2] = {0};
+uint32_t Volume_Period[MAX_VOLUME_SAMPLES] = {0};
 uint8_t Acceleration[ACC_FIFO_WATERMARK*7] = {0};
 uint16_t Last_Pressure = 0;
 uint16_t Last_Volume = 0;
@@ -247,6 +247,11 @@ int main(void)
             Apply_Config();
             flags.CMD.Set_Config = 0;
         }
+        else if(flags.CMD.Get_Config)
+        {
+            Get_Config();
+            flags.CMD.Get_Config = 0;
+        }
         else if(flags.CMD.Start_OTA)
         {
             state = OTA_STATE;
@@ -289,8 +294,7 @@ int main(void)
             else if(flags.CMD.Idle)
             {
                 state = IDLE;
-                HAL_ADC_Stop_DMA(PRESSURE_ADC);
-                HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
+                Stop_Measure();
                 flags.CMD.Idle = 0;
             }
             else if(flags.CMD.Measure_Request)

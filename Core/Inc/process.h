@@ -15,6 +15,7 @@ void Switch_Buffer(void);
 void Erase_RAM_Data(void);
 void Start_Measure(void);
 void Stop_Measure(void);
+void Stop_Measure(void);
 void Warning_Detection(uint16_t* Data);
 void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_data);
 uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t start_address);
