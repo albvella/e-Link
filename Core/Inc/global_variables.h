@@ -14,17 +14,13 @@
 #include "FatFs/ff.h"
 #include "lsm6dsv16x_reg.h"
 
-#define APP_CONFIG_FILE "/flash/config.bin"
+#define CONFIG_FILE "/flash/config.bin"
 
-#define APP_OTA_FILE (1)
-#define APP_OTA_FILE_NAME "/ram/ota.bin"
-#define APP_OTA_FILE_SIZE (0x1F400) // 128 kBytes
+#define OTA_FILE (1)
+#define OTA_FILE_NAME "/ram/ota.bin"
+#define OTA_FILE_SIZE (0x1F400) // 128 kBytes
 
-#define APP_MEASURE_FILE (2)
-#define MEASURE_FILE_NAME_1 "/ram/meas1.bin"
-#define MEASURE_FILE_NAME_2 "/ram/meas2.bin"
-
-#define SIM_RXBUFFER_SIZE          1024
+#define SIM_RXBUFFER_SIZE          2000
 #define ACC_FIFO_WATERMARK         200
 #define PRESS_HALF_SAMPLES         ACC_FIFO_WATERMARK
 #define PRESS_FULL_SAMPLES         PRESS_HALF_SAMPLES * 2

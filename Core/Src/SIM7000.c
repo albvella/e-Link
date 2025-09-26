@@ -162,6 +162,9 @@ void SIM_Init(void)
 	SIM_Send_Command(command);
 	SIM_Wait_Response("OK");
 
+	SIM_Send_Command("AT+CIPRXGET=1\r");                                                         //Impostazione ricezione manuale da server TCP
+	SIM_Wait_Response("OK");
+
 	sprintf(command, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);        //Connessione TCP
 	SIM_Send_Command(command);
 	SIM_Wait_Response("CONNECT OK");
@@ -218,12 +221,13 @@ void SIM_Send_Command_DMA(char* command)
 }
 
 /*------RICEZIONE RISPOSTA DAL MODULO LTE------*/
-void SIM_Receive_Response(char* response)
+uint16_t SIM_Receive_Response(char* response)
 {
 	uint16_t max_size = 256;
 	uint16_t RxLen = 0;
 
-	HAL_UARTEx_ReceiveToIdle(LTE_UART, (uint8_t *)response, max_size, &RxLen, 200);
+	HAL_UARTEx_ReceiveToIdle(LTE_UART, (uint8_t *)response, max_size, &RxLen, 1000);
+	return RxLen;
 }
 
 /*------CONTROLLO INDIRIZZO IP------*/
@@ -409,8 +413,8 @@ void SIM_Get_Cfg(char* cmd_start, char* cmd_end)
 	cfg_idx = atoi(comma2 + 1);
 }
 
-/*------PUBBLICAZIONE MESSAGGIO MQTT------*/
-void SIM_publish_MQTT_Message(const char* topic, const char* message)
+/*------PUBBLICAZIONE MESSAGGIO MQTT IN MODALITA' DMA------*/
+void SIM_publish_MQTT_Message_DMA(const char* topic, const char* message)
 {
     char command[256];
     uint16_t len = (uint16_t)strlen(message);
@@ -425,6 +429,27 @@ void SIM_publish_MQTT_Message(const char* topic, const char* message)
     }
     
     SIM_Send_Command_DMA(command);
+}
+
+/*-----PUBBLICAZIONE MESSAGGIO MQTT-----*/
+void SIM_publish_MQTT_Message(const char* topic, const char* message)
+{
+	char command[256];
+	uint16_t len = (uint16_t)strlen(message);
+
+	if(topic != NULL && strlen(topic) > 0)
+	{
+		sprintf(command, "AT+SMPUB=\"%s\",%d,1,0\r", topic, len);
+	} 
+	else 
+	{
+		sprintf(command, "AT+SMPUB=%d\r", len);
+	}
+	
+	SIM_Send_Command(command);
+	SIM_Wait_Response(">");                       
+	HAL_UART_Transmit(LTE_UART, message, strlen(message), 1000);
+    SIM_Wait_Response("OK");
 }
 
 /*-----INVIO DATI AL SERVER TCP-----*/

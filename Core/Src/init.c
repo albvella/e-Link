@@ -171,7 +171,7 @@ void Config_Init(void)
     UINT bytes_read;
     UINT bytes_written;
 
-    if (f_open(&config_file, APP_CONFIG_FILE, FA_READ) == FR_OK) 
+    if (f_open(&config_file, CONFIG_FILE, FA_READ) == FR_OK) 
 	{
         if (f_read(&config_file, &config, sizeof(config), &bytes_read) == FR_OK && bytes_read == sizeof(config))
 		{
@@ -195,7 +195,7 @@ void Config_Init(void)
     strcpy(config.ota_topic, "OTA_Topic");
 	strcpy(config.info_topic, "Info_Topic");
     
-    if (f_open(&config_file, APP_CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+    if (f_open(&config_file, CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
     {
         return;
     }

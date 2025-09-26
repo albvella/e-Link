@@ -35,6 +35,7 @@
 #include "battery_charger.h"
 #include "lsm6dsv16x_reg.h"
 #include "SIM7000.h"
+#include "ota.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -232,37 +233,37 @@ int main(void)
 		switch(state)
 		{
 		case IDLE:
-        if(flags.MQTT_Message_Rx)
-        {
-            SIM_Parse_Command();
-            flags.MQTT_Message_Rx = 0;
-        }
-        if(flags.CMD.Start_Meas)
-        {
-            state = MEASURE_INIT_STATE;
-            flags.CMD.Start_Meas = 0;
-        }
-        else if(flags.CMD.Set_Config)
-        {
-            Apply_Config();
-            flags.CMD.Set_Config = 0;
-        }
-        else if(flags.CMD.Get_Config)
-        {
-            Get_Config();
-            flags.CMD.Get_Config = 0;
-        }
-        else if(flags.CMD.Start_OTA)
-        {
-            state = OTA_STATE;
-            flags.CMD.Start_OTA = 0;
-        }
-        else if(flags.CMD.Ping)
-        {
-            SIM_Send_Infos();
-            flags.CMD.Ping = 0;
-        }
-        break;
+			if(flags.MQTT_Message_Rx)
+			{
+				SIM_Parse_Command();
+				flags.MQTT_Message_Rx = 0;
+			}
+			if(flags.CMD.Start_Meas)
+			{
+				state = MEASURE_INIT_STATE;
+				flags.CMD.Start_Meas = 0;
+			}
+			else if(flags.CMD.Set_Config)
+			{
+				Apply_Config();
+				flags.CMD.Set_Config = 0;
+			}
+			else if(flags.CMD.Get_Config)
+			{
+				Get_Config();
+				flags.CMD.Get_Config = 0;
+			}
+			else if(flags.CMD.Start_OTA)
+			{
+				state = OTA_STATE;
+				flags.CMD.Start_OTA = 0;
+			}
+			else if(flags.CMD.Ping)
+			{
+				SIM_Send_Infos();
+				flags.CMD.Ping = 0;
+			}
+			break;
 
 		case MEASURE_INIT_STATE:
 			Start_Measure();
@@ -270,69 +271,115 @@ int main(void)
         break;
 
 		case MEASURING_STATE:
-        if(flags.ADC_Complete && flags.ACC_Complete)
-        {
-            Save_Data();
-            if(flags.BC_Interrupt)
-            {
-                BC_Read_Flags(&sys.BC_Flags);
-                BC_Manage_Interrupts(sys.BC_Flags);
-                flags.BC_Interrupt = 0;
-            }
-            if(flags.MQTT_Message_Rx)
-            {
-                SIM_Parse_Command();
-                flags.MQTT_Message_Rx = 0;
-            }
-            if(flags.CMD.Data_Request)
-            {
-                sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
-                SIM_publish_MQTT_Message(NULL, MQTT_Logging);
-                sys.SIM_Prompt_Status = HAL_GetTick();
-                flags.CMD.Data_Request = 0;
-            }
-            else if(flags.CMD.Idle)
-            {
-                state = IDLE;
-                Stop_Measure();
-                flags.CMD.Idle = 0;
-            }
-            else if(flags.CMD.Measure_Request)
-            {
-                if(!flags.TCP_isSending)
-                {
-                    Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
-                    if(flags.TCP_ReadytoSend)
-                    {
-                        SIM_Send_Command_DMA(MQTT_Logging);
-                        flags.TCP_isSending = 1;
-                        flags.TCP_ReadytoSend = 0;
-                        if (Send_Measure_Addr == 0) 
-                        {
-                            memset(tcp_chunk, 0, 1460);
-                            flags.CMD.Measure_Request = 0;
-                        }
-                    }
-                }
-            }
-            if(flags.MQTT_ReadytoSend)
-            {
-                SIM_Send_Command_DMA(MQTT_Logging);
-                flags.MQTT_ReadytoSend = 0;
-            }
-            if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
-            {
-                SIM_Send_Command_DMA("AT+SMCONN\r");
-                sys.SIM_Prompt_Status = 0;
-            }
-        }
-        break;
+			if(flags.ADC_Complete && flags.ACC_Complete)
+			{
+				Save_Data();
+				if(flags.BC_Interrupt)
+				{
+					BC_Read_Flags(&sys.BC_Flags);
+					BC_Manage_Interrupts(sys.BC_Flags);
+					flags.BC_Interrupt = 0;
+				}
+				if(flags.MQTT_Message_Rx)
+				{
+					SIM_Parse_Command();
+					flags.MQTT_Message_Rx = 0;
+				}
+				if(flags.CMD.Data_Request)
+				{
+					sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+					SIM_publish_MQTT_Message_DMA(NULL, MQTT_Logging);
+					sys.SIM_Prompt_Status = HAL_GetTick();
+					flags.CMD.Data_Request = 0;
+				}
+				else if(flags.CMD.Idle)
+				{
+					state = IDLE;
+					Stop_Measure();
+					flags.CMD.Idle = 0;
+				}
+				else if(flags.CMD.Measure_Request)
+				{
+					if(!flags.TCP_isSending)
+					{
+						Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
+						if(flags.TCP_ReadytoSend)
+						{
+							SIM_Send_Command_DMA(MQTT_Logging);
+							flags.TCP_isSending = 1;
+							flags.TCP_ReadytoSend = 0;
+							if (Send_Measure_Addr == 0)
+							{
+								memset(tcp_chunk, 0, 1460);
+								flags.CMD.Measure_Request = 0;
+							}
+						}
+					}
+				}
+				if(flags.MQTT_ReadytoSend)
+				{
+					SIM_Send_Command_DMA(MQTT_Logging);
+					flags.MQTT_ReadytoSend = 0;
+				}
+				if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
+				{
+					SIM_Send_Command_DMA("AT+SMCONN\r");
+					sys.SIM_Prompt_Status = 0;
+				}
+			}
+			break;
 
 		case OTA_STATE:
-        break;
+			if(OTA_Init() == HAL_OK)
+			{
+				HAL_UART_DMAStop(LTE_UART);
+				HAL_Delay(100);
+				SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_READY");
+				if(OTA_Receive() == HAL_OK)
+				{
+					SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_RECEIVED");
+					if(OTA_CRC_Check() == HAL_OK)
+					{
+						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_CRC_OK");
+					}
+					else
+					{
+						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_CRC_ERROR");
+						HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+						state = IDLE;
+						break;
+					}
+
+					if(OTA_Apply() == HAL_OK)
+					{
+						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_SUCCESS");
+						HAL_Delay(500);
+						NVIC_SystemReset();
+					}
+					else
+					{
+						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_APPLY_ERROR");
+						HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+						state = IDLE;
+					}
+				}
+				else
+				{
+					SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_RECEIVE_ERROR");
+					HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+					state = IDLE;
+				}
+			}
+			else
+			{
+				SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_INIT_ERROR");
+				HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+				state = IDLE;
+			}
+			break;
 
 		default:
-			  break;
+			break;
 		}
     /* USER CODE END WHILE */
 

@@ -550,7 +550,7 @@ void Apply_Config(void)
 		return;
 	}
 
-	if (f_open(&config_file, APP_CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK)
+	if (f_open(&config_file, CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK)
 	{
 		f_write(&config_file, &config, sizeof(config), &bytes_written);
 		f_close(&config_file);
@@ -621,11 +621,6 @@ void Get_Config(void)
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));	
 
 	SIM_publish_MQTT_Message(topic, value_str);
-	SIM_Wait_Response(">");                       
-
-    HAL_UART_Transmit(LTE_UART, value_str, strlen(value_str), 1000);
-
-    SIM_Wait_Response("OK");
 }
 
 /*-----AZZERAMENTO FLAG-----*/

@@ -99,8 +99,8 @@ typedef struct {
 } TCP_Typedef;
 
 typedef struct {
-    uint8_t file_ota_open;
-    FIL file_ota;
+    uint8_t OTA_File_isOpen : 1;
+    FIL OTA_File;
     uint8_t ACC_Present : 1;
     uint8_t RAM_Mounted : 1;
 	uint8_t FLASH_Mounted : 1;
