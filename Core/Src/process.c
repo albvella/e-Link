@@ -163,6 +163,7 @@ void Start_Measure(void)
 	sys.Inactive_RAM_Len = 0;
 	sys.Current_RAM_Base = RAM_FIRST_BUFFER_ADD;
 	sys.Current_RAM_Len = 0;
+	flags.SIM_isConnected = 1;
 	memset(Pressure, 0, sizeof(Pressure));
 	memset(Volume_Period, 0, sizeof(Volume_Period));
 	memset(Acceleration, 0, sizeof(Acceleration));

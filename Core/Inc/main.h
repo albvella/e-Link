@@ -78,6 +78,7 @@ typedef struct {
     uint8_t MQTT_ReadytoSend : 1;
     uint8_t TCP_ReadytoSend : 1;
     uint8_t TCP_isSending : 1;
+    uint8_t SIM_isConnected : 1;
     CMD_Typedef CMD;
 } System_Flags_TypeDef;
 
@@ -107,6 +108,8 @@ typedef struct {
     uint16_t Low_th;
     uint16_t High_th;
     uint64_t BC_Flags;
+    RTC_DateTypeDef onDate;
+	RTC_TimeTypeDef onTime;
     char apn[100];
     uint32_t RAM_Samples_Number;
     uint8_t Active_RAM_Buffer;
@@ -115,6 +118,7 @@ typedef struct {
     uint32_t RAM_Buffer_Base_tosend;
     uint32_t Inactive_RAM_Len;
     uint32_t SIM_Prompt_Status;
+    uint32_t SIM_Connection_Timeout;
     MQTT_TypeDef MQTT;
     TCP_Typedef TCP;
 } System_Resources_Typedef;

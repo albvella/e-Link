@@ -9,47 +9,46 @@
 #include "peripherals.h"
 
 /*------ACCENSIONE LED------*/
-void LED_Start(uint32_t LED, uint8_t mode)
+void LED_Start(uint32_t LED, uint32_t freq_hz, uint8_t mode)
 {
-	TIM_OC_InitTypeDef sConfigOC = {0};
-	sConfigOC.OCMode = TIM_OCMODE_TIMING;
-	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-	sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-	sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-	sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+    TIM_HandleTypeDef *htim = LED_TIMER;
+    uint32_t prescaler = (uint32_t)(SystemCoreClock / 1000000 - 1);
+    uint32_t period = (prescaler / freq_hz) - 1;
+	uint32_t pulse = 0;
 
 	switch(mode)
 	{
-	case ON:
-		sConfigOC.Pulse = 49999;
-		break;
-	case FAST:
-		sConfigOC.Pulse = 24999;
-		break;
-	case SLOW:
-		sConfigOC.Pulse = 12499;
-		break;
+		case ON:
+			pulse = period; 
+		    break;
+		case FAST:
+			pulse = period / 2;
+			break;
+		case SLOW:
+			pulse = period / 4;
+			break;
 	}
 
-	HAL_TIM_Base_Init(LED_TIMER);
-	HAL_TIM_PWM_Init(LED_TIMER);
+    // Imposta periodo e prescaler
+    htim->Instance->PSC = prescaler;
+    htim->Instance->ARR = period;
+    htim->Instance->CCR1 = (LED == GRN_LED) ? pulse : htim->Instance->CCR1;
+    htim->Instance->CCR2 = (LED == ORG_LED) ? pulse : htim->Instance->CCR2;
+    htim->Instance->CCR3 = (LED == RED_LED) ? pulse : htim->Instance->CCR3;
 
-	switch(LED)
-	{
-	case GRN_LED:
-		HAL_TIM_PWM_ConfigChannel(LED_TIMER, &sConfigOC, LED);
-		HAL_TIM_PWM_Start(LED_TIMER, LED);
-		break;
-	case RED_LED:
-		HAL_TIM_PWM_ConfigChannel(LED_TIMER, &sConfigOC, LED);
-		HAL_TIM_PWM_Start(LED_TIMER, LED);
-		break;
-	case ORG_LED:
-		HAL_TIM_PWM_ConfigChannel(LED_TIMER, &sConfigOC, LED);
-		HAL_TIM_PWM_Start(LED_TIMER, LED);
-		break;
-	}
+    // Avvia PWM solo se non già attivo
+    switch(LED)
+    {
+        case GRN_LED:
+            htim->Instance->CCER |= TIM_CCER_CC1E;
+            break;
+        case ORG_LED:
+            htim->Instance->CCER |= TIM_CCER_CC2E;
+            break;
+        case RED_LED:
+            htim->Instance->CCER |= TIM_CCER_CC3E;
+            break;
+    }
 }
 
 /*------SPEGNIMENTO LED------*/

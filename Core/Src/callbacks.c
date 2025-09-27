@@ -63,7 +63,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 /* ------CALLBACK UART RX IDLE------*/
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-	if(huart == LTE_UART)
+	if(huart == SIM_UART)
 	{
 		if(*(uint8_t*)sim_rx_buffer == '>')
 		{
@@ -97,13 +97,13 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 		}
 	}
 	
-	HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
+	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 }
 
 /* ------CALLBACK UART RX COMPLETE------*/
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	if (huart == LTE_UART)
+	if (huart == SIM_UART)
 	{
 
 	}
@@ -113,7 +113,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 /* ------CALLBACK UART TX COMPLETE------*/
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-	if (huart == LTE_UART)
+	if (huart == SIM_UART)
 	{
 
 	}

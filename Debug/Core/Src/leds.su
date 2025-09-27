@@ -1,2 +1,2 @@
-../Core/Src/leds.c:12:6:LED_Start	48	static
-../Core/Src/leds.c:56:6:LED_Stop	16	static
+../Core/Src/leds.c:12:6:LED_Start	40	static
+../Core/Src/leds.c:55:6:LED_Stop	16	static

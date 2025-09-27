@@ -30,7 +30,7 @@ extern UART_HandleTypeDef huart1;
 #define RED_LED        (TIM_CHANNEL_2)
 #define ORG_LED        (TIM_CHANNEL_1)
 #define TEMP_UART      (&huart4)
-#define LTE_UART       (&huart1)
+#define SIM_UART       (&huart1)
 #define I2C            (&hi2c3)
 #define EXTFLASH_SPI   (&hspi2)
 #define PSRAM_SPI      (&hqspi)

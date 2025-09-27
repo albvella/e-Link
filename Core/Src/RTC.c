@@ -64,6 +64,10 @@ int Get_DateTime_From_Network(void)
 
 	HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 	HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+
+    sys.onDate = sDate;
+    sys.onTime = sTime;
+    
 	return 1;
 }
 
@@ -87,6 +91,9 @@ void Set_Default_DateTime(void)
 
     HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
     HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+
+    sys.onDate = sDate;
+    sys.onTime = sTime;
 }
 
 /*-----CALCOLO GIORNO SETTIMANA-----*/

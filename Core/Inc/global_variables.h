@@ -42,6 +42,7 @@
 #define RAM_SECOND_BUFFER_ADD     0x400000
 
 #define SIM_PROMPT_TIMEOUT_MS 3000
+#define SIM_CONNECTION_TIMEOUT_MS 60000
 
 
 extern Machine_State_TypeDef state;

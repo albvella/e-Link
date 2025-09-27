@@ -24,20 +24,20 @@ void System_Init(void)
 	acc.read_reg = acc_read;
 	acc.handle = &hspi3;
 
-	LED_Start(ORG_LED, FAST);
+	LED_Start(ORG_LED, 1, FAST);
 
 	BC_Init();
 	INA3221_Init();
 	FatFS_Init();
 	Config_Init();
 	Acc_Init(&acc);
-	SIM_Init();
+	while(SIM_Init() != HAL_OK);
 	RTC_Init();
 	Temperature = Read_Temperature();
 
-	HAL_UARTEx_ReceiveToIdle_DMA(LTE_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
+	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 
-	LED_Start(RED_LED, ON);
+	LED_Start(RED_LED, 1, ON);
 	HAL_Delay(9000);
 
 	LED_Stop(RED_LED);
