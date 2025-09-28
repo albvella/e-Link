@@ -118,7 +118,7 @@ typedef struct {
     uint32_t RAM_Buffer_Base_tosend;
     uint32_t Inactive_RAM_Len;
     uint32_t SIM_Prompt_Status;
-    uint32_t SIM_Connection_Timeout;
+    uint32_t SIM_Connection_Status;
     MQTT_TypeDef MQTT;
     TCP_Typedef TCP;
 } System_Resources_Typedef;
@@ -127,6 +127,7 @@ typedef struct {
     uint8_t device_id;
     uint16_t samp_freq;
     uint8_t buffering_secs;
+    uint32_t connection_timeout;
     uint16_t hammer_th;                    
     uint16_t low_th[24];                   
     uint16_t high_th[24];                  

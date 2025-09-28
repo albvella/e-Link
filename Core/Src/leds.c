@@ -9,24 +9,48 @@
 #include "peripherals.h"
 
 /*------ACCENSIONE LED------*/
-void LED_Start(uint32_t LED, uint32_t freq_hz, uint8_t mode)
+void LED_Start(uint32_t LED, uint8_t freq, uint8_t duty)
 {
     TIM_HandleTypeDef *htim = LED_TIMER;
-    uint32_t prescaler = (uint32_t)(SystemCoreClock / 1000000 - 1);
-    uint32_t period = (prescaler / freq_hz) - 1;
-	uint32_t pulse = 0;
+	uint16_t pulse = 0;
 
-	switch(mode)
+    uint16_t prescaler = (uint16_t)(SystemCoreClock / 5000 - 1);
+    uint16_t period = 0;
+
+    switch(freq)
+    {
+        case FAST:  
+            period = (uint16_t)((prescaler / 2) - 1);
+            break;
+        case MEDIUM:
+            period = (uint16_t)(prescaler / 1 - 1);
+            break;
+        case SLOW:
+            prescaler = (uint16_t)(SystemCoreClock / 0.5 - 1);
+            break;
+        case VERY_SLOW:
+            prescaler = (uint16_t)(SystemCoreClock / 0.1 - 1);
+            break;
+        default:
+            return;
+    }
+
+	switch(duty)
 	{
-		case ON:
+		case FULL:
 			pulse = period; 
 		    break;
-		case FAST:
+        case HIGH:
+			pulse = period * 3 / 4;
+			break;
+		case HALF:
 			pulse = period / 2;
 			break;
-		case SLOW:
+		case LOW:
 			pulse = period / 4;
 			break;
+        default:
+            return;
 	}
 
     // Imposta periodo e prescaler

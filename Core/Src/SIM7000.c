@@ -445,7 +445,7 @@ void SIM_publish_MQTT_Message(const char* topic, const char* message)
 	
 	SIM_Send_Command(command);
 	SIM_Wait_Response(">");                       
-	HAL_UART_Transmit(SIM_UART, message, strlen(message), 1000);
+	HAL_UART_Transmit(SIM_UART, (uint8_t*)message, strlen(message), 1000);
     SIM_Wait_Response("OK");
 }
 
@@ -485,7 +485,6 @@ void SIM_Send_Infos(void)
 	uint16_t len = 0;
 	char command[128];
 	char infos[512];
-	uint16_t Vbatt = 0;
 	uint16_t new_temp = 0;
 
 	BC_MultiRead_Reg(REG3B_VBAT_ADC, &Vbatt);

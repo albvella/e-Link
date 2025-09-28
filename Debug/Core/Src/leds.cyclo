@@ -1,2 +1,2 @@
-../Core/Src/leds.c:12:6:LED_Start	12
-../Core/Src/leds.c:55:6:LED_Stop	1
+../Core/Src/leds.c:12:6:LED_Start	17
+../Core/Src/leds.c:79:6:LED_Stop	1

@@ -101,6 +101,7 @@ uint16_t Last_Pressure = 0;
 uint16_t Last_Volume = 0;
 Acceleration_Data_TypeDef Last_Acceleration = {0};
 uint16_t Temperature = 0;
+uint16_t Vbatt = 0;
 
 char MQTT_Logging[100] = {0};
 uint8_t Saving_Buffer[SAVING_BUFFER_LEN] = {0};
@@ -263,11 +264,11 @@ int main(void)
 					flags.CMD.Ping = 0;
 				}
 			}
-			else if(HAL_GetTick() - sys.SIM_Connection_Timeout > SIM_CONNECTION_TIMEOUT_MS)                  // Controllo connessione MQTT e TCP ogni 60 secondi
-					{
+			else if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout)                  // Controllo connessione MQTT e TCP ogni 60 secondi
+			{
 				SIM_Check_Connection();
-				sys.SIM_Connection_Timeout = HAL_GetTick();
-					}
+				sys.SIM_Connection_Status = HAL_GetTick();
+			}
 			break;
 
 		case MEASURE_INIT_STATE:
@@ -293,7 +294,7 @@ int main(void)
 				}
 				if(flags.CMD.Data_Request)
 				{
-					sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+					sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Vbatt, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
 					SIM_publish_MQTT_Message_DMA(NULL, MQTT_Logging);
 					sys.SIM_Prompt_Status = HAL_GetTick();
 					flags.CMD.Data_Request = 0;
@@ -332,9 +333,9 @@ int main(void)
 					SIM_Send_Command_DMA("AT+SMCONN\r");
 					sys.SIM_Prompt_Status = 0;
 				}
-				if(HAL_GetTick() - sys.SIM_Connection_Timeout > SIM_CONNECTION_TIMEOUT_MS)
+				if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout)
 				{
-					sys.SIM_Connection_Timeout = HAL_GetTick();
+					sys.SIM_Connection_Status = HAL_GetTick();
 					if(flags.SIM_isConnected)
 					{
 						flags.SIM_isConnected = 0;

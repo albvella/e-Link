@@ -24,7 +24,7 @@ void System_Init(void)
 	acc.read_reg = acc_read;
 	acc.handle = &hspi3;
 
-	LED_Start(ORG_LED, 1, FAST);
+	LED_Start(ORG_LED, FAST, HIGH);
 
 	BC_Init();
 	INA3221_Init();
@@ -37,7 +37,7 @@ void System_Init(void)
 
 	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 
-	LED_Start(RED_LED, 1, ON);
+	LED_Start(RED_LED, SLOW, FULL);
 	HAL_Delay(9000);
 
 	LED_Stop(RED_LED);
@@ -184,6 +184,7 @@ void Config_Init(void)
     config.device_id = 0;
 	config.samp_freq = 800;
 	config.buffering_secs = 30;
+	config.connection_timeout = 60000;
 	config.hammer_th = 2048;
     for(int i = 0; i < 24; i++) 
 	{

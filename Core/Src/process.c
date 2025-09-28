@@ -17,6 +17,7 @@
 #include "FatFs/ff.h"
 #include "psram.h"
 #include "stdlib.h"
+#include "battery_charger.h"
 
 
 /*-----ACQUISIZIONE MISURE E LOG DEI DATI-----*/
@@ -86,6 +87,7 @@ void Save_Data(void)
 	{
 		Temperature = new_temp;
 	}
+	BC_MultiRead_Reg(REG3B_VBAT_ADC, &Vbatt);
 
 	uint8_t compressed_data[MAX_COMPRESSED_SIZE];
 	Compressed_Sample_Typedef sample;
@@ -333,7 +335,7 @@ Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uin
 	uint8_t packed_byte = 0;
 	Compressed_Sizes_Typedef sizes = {0, 0, 0};
 
-    AdpcmState_Typedef press_state = {0, 0}, flow_state = {0, 0};
+    AdpcmState_Typedef press_state = {0, 0};
     AdpcmState_Typedef acc_x_state = {0, 0}, acc_y_state = {0, 0}, acc_z_state = {0, 0};
 
 	// --- 1. Pressione ---
@@ -504,6 +506,10 @@ void Apply_Config(void)
 			}
 		}
 	}
+	else if(strcmp(cfg_var, "CONN_TIMEOUT") == 0)
+	{
+		config.connection_timeout = (uint32_t)atoi(new_cfg_val);
+	}
 	else if(strcmp(cfg_var, "HAMMER_TH") == 0)
 	{
 		config.hammer_th = (uint16_t)atoi(new_cfg_val);
@@ -583,6 +589,10 @@ void Get_Config(void)
 	else if(strcmp(cfg_var, "BUFFER_SECS") == 0)
 	{
 		sprintf(value_str, "%u", config.buffering_secs);
+	}
+	else if(strcmp(cfg_var, "CONN_TIMEOUT") == 0)
+	{
+		sprintf(value_str, "%lu", config.connection_timeout);
 	}
 	else if(strcmp(cfg_var, "HAMMER_TH") == 0)
 	{
