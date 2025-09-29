@@ -495,8 +495,9 @@ void SIM_Send_Infos(void)
 	{
 		Temperature = new_temp;
 	}
+	uint16_t fw_ver = FW_VERSION;
 
-	sprintf(infos, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, sys.onDate.Year, sys.onDate.Month, sys.onDate.Date, sys.onTime.Hours, sys.onTime.Minutes, sys.onTime.Seconds, Vbatt, config.samp_freq, config.buffering_secs, Supply.v1, Supply.v2, Supply.v3, Supply.i1, Supply.i2, Supply.i3, Temperature);
+	sprintf(infos, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, fw_ver, sys.onDate.Year, sys.onDate.Month, sys.onDate.Date, sys.onTime.Hours, sys.onTime.Minutes, sys.onTime.Seconds, Vbatt, config.samp_freq, config.buffering_secs, Supply.v1, Supply.v2, Supply.v3, Supply.i1, Supply.i2, Supply.i3, Temperature);
 	len = (uint16_t)strlen(infos);
 
 	sprintf(command, "AT+SMPUB=\"%s\",%d,1,0\r", sys.MQTT.Info_Topic, len);

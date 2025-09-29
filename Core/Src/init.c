@@ -24,7 +24,7 @@ void System_Init(void)
 	acc.read_reg = acc_read;
 	acc.handle = &hspi3;
 
-	LED_Start(GRN_LED, SLOW, HIGH);
+	LED_Start(GRN_LED, FAST, HIGH);
 
 	BC_Init();
 	INA3221_Init();
@@ -39,7 +39,6 @@ void System_Init(void)
 
 	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 
-	LED_Start(RED_LED, SLOW, FULL);
 	HAL_Delay(9000);
 	LED_Start(GRN_LED, MEDIUM, HALF);
 }

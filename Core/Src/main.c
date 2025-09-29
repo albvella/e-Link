@@ -236,7 +236,7 @@ int main(void)
 		case IDLE:
 			if(flags.MQTT_Message_Rx)
 			{
-				LED_Start(RED_LED, FAST, HIGH);
+				LED_Start(RED_LED, MEDIUM, HIGH);
 				SIM_Parse_Command();
 				flags.MQTT_Message_Rx = 0;
 				if(flags.CMD.Start_Meas)
@@ -257,7 +257,7 @@ int main(void)
 				else if(flags.CMD.Start_OTA)
 				{
 					LED_Stop(GRN_LED);
-					LED_Start(ORG_LED, VERY_SLOW, FULL);
+					LED_Start(ORG_LED, FAST, FULL);
 					LED_Start(RED_LED, FAST, HIGH);
 					state = OTA_STATE;
 					flags.CMD.Start_OTA = 0;
@@ -271,7 +271,7 @@ int main(void)
 			}
 			else if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout)                  // Controllo connessione MQTT e TCP ogni 60 secondi
 			{
-				LED_Start(ORG_LED, FAST, HALF);
+				LED_Start(ORG_LED, MEDIUM, HALF);
 				SIM_Check_Connection();
 				sys.SIM_Connection_Status = HAL_GetTick();
 				LED_Stop(ORG_LED);
@@ -280,7 +280,7 @@ int main(void)
 
 		case MEASURE_INIT_STATE:
 			Start_Measure();
-			LED_Start(GRN_LED, VERY_SLOW, FULL);
+			LED_Start(GRN_LED, FAST, FULL);
 			state = MEASURING_STATE;
 			break;
 

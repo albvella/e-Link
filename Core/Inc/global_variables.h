@@ -14,6 +14,9 @@
 #include "FatFs/ff.h"
 #include "lsm6dsv16x_reg.h"
 
+
+#define FW_VERSION 0x0100
+
 #define CONFIG_FILE "/flash/config.bin"
 
 #define OTA_FILE (1)
