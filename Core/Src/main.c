@@ -236,6 +236,7 @@ int main(void)
 		case IDLE:
 			if(flags.MQTT_Message_Rx)
 			{
+				LED_Start(RED_LED, FAST, HIGH);
 				SIM_Parse_Command();
 				flags.MQTT_Message_Rx = 0;
 				if(flags.CMD.Start_Meas)
@@ -255,6 +256,9 @@ int main(void)
 				}
 				else if(flags.CMD.Start_OTA)
 				{
+					LED_Stop(GRN_LED);
+					LED_Start(ORG_LED, VERY_SLOW, FULL);
+					LED_Start(RED_LED, FAST, HIGH);
 					state = OTA_STATE;
 					flags.CMD.Start_OTA = 0;
 				}
@@ -263,16 +267,20 @@ int main(void)
 					SIM_Send_Infos();
 					flags.CMD.Ping = 0;
 				}
+				LED_Stop(RED_LED);
 			}
 			else if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout)                  // Controllo connessione MQTT e TCP ogni 60 secondi
 			{
+				LED_Start(ORG_LED, FAST, HALF);
 				SIM_Check_Connection();
 				sys.SIM_Connection_Status = HAL_GetTick();
+				LED_Stop(ORG_LED);
 			}
 			break;
 
 		case MEASURE_INIT_STATE:
 			Start_Measure();
+			LED_Start(GRN_LED, VERY_SLOW, FULL);
 			state = MEASURING_STATE;
 			break;
 
@@ -294,6 +302,7 @@ int main(void)
 				}
 				if(flags.CMD.Data_Request)
 				{
+					LED_Start(ORG_LED, FAST, HIGH);
 					sprintf(MQTT_Logging, "%u:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Vbatt, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
 					SIM_publish_MQTT_Message_DMA(NULL, MQTT_Logging);
 					sys.SIM_Prompt_Status = HAL_GetTick();
@@ -301,6 +310,9 @@ int main(void)
 				}
 				else if(flags.CMD.Idle)
 				{
+					LED_Stop(ORG_LED);
+					LED_Stop(RED_LED);
+					LED_Start(GRN_LED, MEDIUM, HALF);
 					state = IDLE;
 					Stop_Measure();
 					flags.CMD.Idle = 0;
@@ -318,6 +330,7 @@ int main(void)
 							if (Send_Measure_Addr == 0)
 							{
 								memset(tcp_chunk, 0, 1460);
+								LED_Stop(RED_LED);
 								flags.CMD.Measure_Request = 0;
 							}
 						}
@@ -326,11 +339,12 @@ int main(void)
 				if(flags.MQTT_ReadytoSend)
 				{
 					SIM_Send_Command_DMA(MQTT_Logging);
+					LED_Stop(ORG_LED);
 					flags.MQTT_ReadytoSend = 0;
 				}
 				if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
 				{
-					SIM_Send_Command_DMA("AT+SMCONN\r");
+					flags.CMD.Data_Request = 1;
 					sys.SIM_Prompt_Status = 0;
 				}
 				if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout)
@@ -365,6 +379,9 @@ int main(void)
 					{
 						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_CRC_ERROR");
 						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+						LED_Stop(ORG_LED);
+						LED_Stop(RED_LED);
+						LED_Start(GRN_LED, MEDIUM, HALF);
 						state = IDLE;
 						break;
 					}
@@ -379,6 +396,9 @@ int main(void)
 					{
 						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_APPLY_ERROR");
 						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+						LED_Stop(ORG_LED);
+						LED_Stop(RED_LED);
+						LED_Start(GRN_LED, MEDIUM, HALF);
 						state = IDLE;
 					}
 				}
@@ -386,6 +406,9 @@ int main(void)
 				{
 					SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_RECEIVE_ERROR");
 					HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+					LED_Stop(ORG_LED);
+					LED_Stop(RED_LED);
+					LED_Start(GRN_LED, MEDIUM, HALF);
 					state = IDLE;
 				}
 			}
@@ -393,6 +416,9 @@ int main(void)
 			{
 				SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_INIT_ERROR");
 				HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+				LED_Stop(ORG_LED);
+				LED_Stop(RED_LED);
+				LED_Start(GRN_LED, MEDIUM, HALF);
 				state = IDLE;
 			}
 			break;

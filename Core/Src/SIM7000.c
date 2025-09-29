@@ -14,6 +14,7 @@
 #include "battery_charger.h"
 #include "DS18B20.h"
 #include "process.h"
+#include "leds.h"
 
 /*------INIZIALIZZAZIONE DEL MODULO LTE------*/
 int SIM_Init(void)
@@ -306,6 +307,7 @@ void SIM_Parse_Command(void)
 							case 0x52534D: // MSR
 								if(!flags.CMD.Measure_Request)
 								{
+									LED_Start(RED_LED, FAST, LOW);
 									Send_Measure_Addr = Saved_Bytes;
 									flags.CMD.Measure_Request = 1; 
 									Switch_Buffer();

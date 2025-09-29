@@ -18,6 +18,7 @@
 #include "psram.h"
 #include "stdlib.h"
 #include "battery_charger.h"
+#include "leds.h"
 
 
 /*-----ACQUISIZIONE MISURE E LOG DEI DATI-----*/
@@ -106,6 +107,7 @@ void Save_Data(void)
 		{
 			if(!flags.CMD.Measure_Request)
 			{
+				LED_Start(RED_LED, FAST, LOW);
 				Switch_Buffer();
 				flags.CMD.Measure_Request = 1;
 				Send_Measure_Addr = Saved_Bytes;

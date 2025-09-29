@@ -13,6 +13,7 @@
 extern ADC_HandleTypeDef hadc1;
 extern DMA_HandleTypeDef hdma_adc1;
 extern CRC_HandleTypeDef hcrc;
+extern CRC_HandleTypeDef hcrc;
 extern I2C_HandleTypeDef hi2c3;
 extern QSPI_HandleTypeDef hqspi;
 extern RTC_HandleTypeDef hrtc;
@@ -43,6 +44,7 @@ extern UART_HandleTypeDef huart1;
 #define BC_INTERRUPT   (GPIO_PIN_4)
 #define RI_INTERRUPT   (GPIO_PIN_8)
 #define BTN_INTERRUPT  (GPIO_PIN_13)
+#define HCRC           (&hcrc)
 
 
 

@@ -24,14 +24,16 @@ void System_Init(void)
 	acc.read_reg = acc_read;
 	acc.handle = &hspi3;
 
-	LED_Start(ORG_LED, FAST, HIGH);
+	LED_Start(GRN_LED, SLOW, HIGH);
 
 	BC_Init();
 	INA3221_Init();
 	FatFS_Init();
 	Config_Init();
 	Acc_Init(&acc);
+	LED_Start(ORG_LED, FAST, HALF);
 	while(SIM_Init() != HAL_OK);
+	LED_Stop(ORG_LED);
 	RTC_Init();
 	Temperature = Read_Temperature();
 
@@ -39,9 +41,7 @@ void System_Init(void)
 
 	LED_Start(RED_LED, SLOW, FULL);
 	HAL_Delay(9000);
-
-	LED_Stop(RED_LED);
-	LED_Stop(ORG_LED);
+	LED_Start(GRN_LED, MEDIUM, HALF);
 }
 
 /*-----INIZiALIZZAZIONE MEMORIE-----*/

@@ -41,7 +41,6 @@ int OTA_Init(void)
 int OTA_Receive(void)
 {
 	uint8_t rx_buffer[1200];
-	uint16_t rx_len = 0;
 	UINT bytes_written = 0;
 	
 	SIM_Wait_Response("+CIPRXGET: 1");
@@ -49,7 +48,7 @@ int OTA_Receive(void)
 	while(1)
 	{
 		SIM_Send_Command("AT+CIPRXGET=2,1024\r");
-		rx_len = SIM_Receive_Response((char*)rx_buffer);
+		SIM_Receive_Response((char*)rx_buffer);
 
 		char *info = strstr((char*)rx_buffer, "+CIPRXGET: 2,");
 		if (info) 
@@ -91,6 +90,7 @@ int OTA_CRC_Check(void)
 	UINT read = 0;
 	uint16_t ota_crc = 0;
 	uint8_t rx_buffer[20];
+	uint32_t calc_crc = 0;
 
 	SIM_Wait_Response("+CIPRXGET: 1");
 	SIM_Send_Command("AT+CIPRXGET=2,2\r");
@@ -107,18 +107,23 @@ int OTA_CRC_Check(void)
 	{
 		return -1;
 	}
+
 	uint32_t size = f_size(&sys.OTA_File);
-	uint16_t calc_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)&size, 1);
+    HAL_CRCEx_Input_Data_Reverse(HCRC, CRC_INPUTDATA_INVERSION_BYTE);
+    HAL_CRCEx_Output_Data_Reverse(HCRC, CRC_OUTPUTDATA_INVERSION_ENABLE);
+    HCRC->Instance->INIT = 0xFFFFFFFF;
+    HAL_CRCEx_Polynomial_Set(HCRC, 0x8005, CRC_POLYLENGTH_32B);
+
 	while (size > 0)
 	{
-		uint8_t buffer[256];
+		uint8_t buffer[1024];
 		UINT to_read = (size > sizeof(buffer)) ? sizeof(buffer) : size;
 		if (f_read(&sys.OTA_File, buffer, to_read, &read) != FR_OK || read == 0)
 		{
 			f_close(&sys.OTA_File);
 			return -1;
 		}
-		calc_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)buffer, read / 4 + (read % 4 != 0));
+		calc_crc = HAL_CRC_Accumulate(HCRC, (uint32_t *)buffer, read / 4 + (read % 4 != 0));
 		size -= read;
 	}
 
@@ -143,7 +148,6 @@ int OTA_Apply(void)
 	uint32_t size = 0;
 	uint64_t pword = 0;
 	uint32_t faddr_off = 0;
-	uint16_t crc = 0;
 	UINT read = 0;
 	uint32_t PageError = 0;
 	FLASH_EraseInitTypeDef erase_cfg = {0};
