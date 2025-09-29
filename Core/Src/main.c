@@ -367,17 +367,17 @@ int main(void)
 			{
 				HAL_UART_DMAStop(SIM_UART);
 				HAL_Delay(100);
-				SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_READY");
+				SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_READY");
 				if(OTA_Receive() == HAL_OK)
 				{
-					SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_RECEIVED");
+					SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_RECEIVED");
 					if(OTA_CRC_Check() == HAL_OK)
 					{
-						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_CRC_OK");
+						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_CRC_OK");
 					}
 					else
 					{
-						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_CRC_ERROR");
+						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_CRC_ERROR");
 						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 						LED_Stop(ORG_LED);
 						LED_Stop(RED_LED);
@@ -388,13 +388,13 @@ int main(void)
 
 					if(OTA_Apply() == HAL_OK)
 					{
-						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_SUCCESS");
+						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_SUCCESS");
 						HAL_Delay(500);
 						NVIC_SystemReset();
 					}
 					else
 					{
-						SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_APPLY_ERROR");
+						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_APPLY_ERROR");
 						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 						LED_Stop(ORG_LED);
 						LED_Stop(RED_LED);
@@ -404,7 +404,7 @@ int main(void)
 				}
 				else
 				{
-					SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_RECEIVE_ERROR");
+					SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_RECEIVE_ERROR");
 					HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 					LED_Stop(ORG_LED);
 					LED_Stop(RED_LED);
@@ -414,7 +414,7 @@ int main(void)
 			}
 			else
 			{
-				SIM_publish_MQTT_Message(sys.MQTT.Info_Topic, "OTA_INIT_ERROR");
+				SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_INIT_ERROR");
 				HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 				LED_Stop(ORG_LED);
 				LED_Stop(RED_LED);
