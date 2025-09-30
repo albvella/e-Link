@@ -13,6 +13,7 @@
 #include "SIM7000.h"
 #include "stdlib.h"
 #include "string.h"
+#include "base64.h"
 
 
 /*-----INIZIALIZZAZIONE OTA-----*/
@@ -40,14 +41,15 @@ int OTA_Init(void)
 /*-----RICEZIONE FILE OTA-----*/
 int OTA_Receive(void)
 {
-	uint8_t rx_buffer[1200];
+	uint8_t rx_buffer[1500];
 	UINT bytes_written = 0;
+	uint8_t bin_buffer[1500];
 	
 	SIM_Wait_Response("+CIPRXGET: 1");
 
 	while(1)
 	{
-		SIM_Send_Command("AT+CIPRXGET=2,1024\r");
+		SIM_Send_Command("AT+CIPRXGET=2,1460\r");
 		SIM_Receive_Response((char*)rx_buffer);
 
 		char *info = strstr((char*)rx_buffer, "+CIPRXGET: 2,");
@@ -63,13 +65,19 @@ int OTA_Receive(void)
 			{
 				data_start += 2; // Salta "\r\n"
 				SIM_Wait_Response("OK");
-				SIM_Wait_Response("+CIPRXGET: 1");
-				f_write(&sys.OTA_File, data_start, actual_len, &bytes_written);
-				if(bytes_written != actual_len)
+				size_t bin_len = Base64_Decode(data_start, bin_buffer, actual_len);
+				f_write(&sys.OTA_File, bin_buffer, bin_len, &bytes_written);
+				if(bytes_written != bin_len)
 				{
 					f_close(&sys.OTA_File);
 					return -1; 
 				}
+				SIM_Send_Command("AT+CIPSEND\r");
+				SIM_Wait_Response(">");
+				SIM_Send_Command("ACK"); // oppure "ACK\n" se vuoi
+				SIM_Send_Command("\x1A"); // CTRL+Z per invio
+				SIM_Wait_Response("SEND OK");
+				SIM_Wait_Response("+CIPRXGET: 1");
 			}
 			else
 			{
@@ -89,17 +97,28 @@ int OTA_CRC_Check(void)
 	FRESULT fRes = 0;
 	UINT read = 0;
 	uint16_t ota_crc = 0;
-	uint8_t rx_buffer[20];
+	uint8_t rx_buffer[64];
 	uint32_t calc_crc = 0;
 
 	SIM_Wait_Response("+CIPRXGET: 1");
-	SIM_Send_Command("AT+CIPRXGET=2,2\r");
+	SIM_Send_Command("AT+CIPRXGET=2,1024\r");
 	SIM_Receive_Response((char*)rx_buffer);
 	char *info = strstr((char*)rx_buffer, "+CIPRXGET: 2,");
+	char *data_start = strstr(info, "\r\n");
 
-	if (info)
+	if (data_start) 
 	{
-		ota_crc = atoi(info + strlen("+CIPRXGET: 2,"));
+		data_start += 2; // Salta "\r\n"
+		uint8_t crc_bin[8];
+		size_t crc_len = Base64_Decode(data_start, crc_bin, sizeof(crc_bin));
+		if (crc_len == 4) 
+		{
+			ota_crc = (crc_bin[0] << 24) | (crc_bin[1] << 16) | (crc_bin[2] << 8) | crc_bin[3];
+		} 
+		else 
+		{
+			return -1;
+		}
 	}
 
 	fRes = f_open(&sys.OTA_File, OTA_FILE_NAME, FA_READ);
@@ -112,7 +131,7 @@ int OTA_CRC_Check(void)
     HAL_CRCEx_Input_Data_Reverse(HCRC, CRC_INPUTDATA_INVERSION_BYTE);
     HAL_CRCEx_Output_Data_Reverse(HCRC, CRC_OUTPUTDATA_INVERSION_ENABLE);
     HCRC->Instance->INIT = 0xFFFFFFFF;
-    HAL_CRCEx_Polynomial_Set(HCRC, 0x8005, CRC_POLYLENGTH_32B);
+    HAL_CRCEx_Polynomial_Set(HCRC, 0x04c11db7, CRC_POLYLENGTH_32B);
 
 	while (size > 0)
 	{
@@ -246,3 +265,5 @@ int OTA_Apply(void)
 
 	return result;
 }
+
+

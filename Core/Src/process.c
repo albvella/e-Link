@@ -19,6 +19,7 @@
 #include "stdlib.h"
 #include "battery_charger.h"
 #include "leds.h"
+#include "base64.h"
 
 
 /*-----ACQUISIZIONE MISURE E LOG DEI DATI-----*/
@@ -58,7 +59,7 @@ void Save_Data(void)
 	{
 		Last_Volume += Volume_Period[i];
 	}
-	Last_Volume = (uint16_t)(Last_Volume / current_period_cnt);
+	Last_Volume = (uint32_t)(Last_Volume / current_period_cnt);
 	memset(Volume_Period, 0, sizeof(Volume_Period));
 	Period_cnt = 0;
 	Address_Offset += MAX_VOLUME_LEN;
@@ -258,34 +259,32 @@ void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_dat
 /*-----INVIO CHUNK MISURA-----*/
 uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t start_address)
 {
-    uint32_t chunk_fill = 0;
+    uint32_t raw_fill = 0;
+    uint8_t raw_buffer[1024]; // buffer temporaneo per i dati raw
     uint32_t address = start_address;
-    uint32_t end_address = start_address; // Per fermarsi quando si torna al punto di partenza
+    uint32_t end_address = start_address;
     uint8_t first_loop = 1;
 
     if (buffer_len == 0) 
-	{
+    {
         return 0;
     }
 
     do {
-        // Gestione wrap-around circolare
         if (address >= buffer_base + buffer_len) 
-		{
+        {
             address = buffer_base;
         }
 
-        // Controlla se c'è spazio per i metadata
         if ((buffer_base + buffer_len - address) < METADATA_SIZE && address < buffer_base + buffer_len) 
-		{
+        {
             break;
         }
-        if ((chunk_fill + METADATA_SIZE) > sizeof(tcp_chunk)) 
-		{
+        if ((raw_fill + METADATA_SIZE) > sizeof(raw_buffer)) 
+        {
             break;
         }
 
-        // Leggi header sample
         Compressed_Sample_Typedef sample_header;
         RAM_Read(address, METADATA_SIZE, (uint8_t*)&sample_header);
 
@@ -294,37 +293,37 @@ uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t 
                                sample_header.compressed_size.acceleration_size;
         uint32_t sample_total_size = METADATA_SIZE + sample_size;
 
-        if ((chunk_fill + sample_total_size) > sizeof(tcp_chunk)) 
-		{
+        if ((raw_fill + sample_total_size) > sizeof(raw_buffer)) 
+        {
             break;
         }
 
-        RAM_Read(address, METADATA_SIZE, tcp_chunk + chunk_fill);
-        chunk_fill += METADATA_SIZE;
+        RAM_Read(address, METADATA_SIZE, raw_buffer + raw_fill);
+        raw_fill += METADATA_SIZE;
         address += METADATA_SIZE;
         if (address >= buffer_base + buffer_len) address = buffer_base;
 
-        RAM_Read(address, sample_size, tcp_chunk + chunk_fill);
-        chunk_fill += sample_size;
+        RAM_Read(address, sample_size, raw_buffer + raw_fill);
+        raw_fill += sample_size;
         address += sample_size;
         if (address >= buffer_base + buffer_len) address = buffer_base;
 
-        // Fermati se hai completato il giro
         if (address == end_address && !first_loop) 
-		{
+        {
             break;
         }
         first_loop = 0;
     } while (1);
 
-    if (chunk_fill > 0) 
-	{
-        SIM_Send_TCP_Chunk_DMA(tcp_chunk, chunk_fill);
+    if (raw_fill > 0) 
+    {
+        // Codifica in base64
+        size_t b64_len = Base64_Encode(raw_buffer, raw_fill, (char*)tcp_chunk, sizeof(tcp_chunk));
+        SIM_Send_TCP_Chunk_DMA(tcp_chunk, b64_len);
     }
 
-    // Se hai completato il giro, ritorna 0
     if (address == end_address) 
-	{
+    {
         return 0;
     }
     return address;

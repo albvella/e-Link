@@ -9,6 +9,8 @@
 #define INC_OTA_H_
 
 #include "main.h"
+#include "stdint.h"
+#include "stddef.h"
 
 int OTA_Init(void);
 int OTA_Receive(void);

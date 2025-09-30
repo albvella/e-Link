@@ -473,12 +473,6 @@ void SIM_Send_TCP_Chunk_DMA(uint8_t* data, uint16_t size)
 
     sprintf(cmd, "AT+CIPSEND=%u\r", size);
     SIM_Send_Command_DMA(cmd);
-
-    SIM_Wait_Response(">");                                    // Attesa prompt '>'
-
-    HAL_UART_Transmit(SIM_UART, data, size, 1000);             // Invia dati binari
-    
-    SIM_Wait_Response("SEND OK");                              // Attesa invio avvenuto
 }
 
 /*-----INVIO INFORMAZIONI AL SERVER MQTT-----*/

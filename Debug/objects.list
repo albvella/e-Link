@@ -2,6 +2,7 @@
 "./Core/Src/INA3221.o"
 "./Core/Src/RTC.o"
 "./Core/Src/SIM7000.o"
+"./Core/Src/base64.o"
 "./Core/Src/battery_charger.o"
 "./Core/Src/callbacks.o"
 "./Core/Src/extflash_hal.o"

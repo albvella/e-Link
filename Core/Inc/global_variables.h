@@ -67,7 +67,7 @@ extern uint16_t Pressure[PRESS_FULL_SAMPLES];
 extern uint32_t Volume_Period[MAX_VOLUME_SAMPLES];
 extern uint8_t Acceleration[ACC_FIFO_WATERMARK*7];
 extern uint16_t Last_Pressure;
-extern uint16_t Last_Volume;
+extern uint32_t Last_Volume;
 extern Acceleration_Data_TypeDef Last_Acceleration;
 extern uint16_t Temperature;
 extern uint16_t Vbatt;
@@ -106,6 +106,9 @@ extern char new_cfg_val[10];
 extern uint16_t step_size_table_16bit[88];
 extern uint16_t step_size_table_12bit[88];
 extern int8_t index_adjustment_table[8];
+
+extern unsigned char base64_table[256];
+extern const char base64_enc_table[64];
 
 
 #endif /* INC_GLOBAL_VARIABLES_H_ */
