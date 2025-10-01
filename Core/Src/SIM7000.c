@@ -113,56 +113,13 @@ int SIM_Init(void)
 		SIM_Receive_Response(response);
 		HAL_Delay(1000);
 	}
+	
+	//MQTT ERA QUA
 
-	sprintf(command, "AT+SMCONF=\"URL\",\"%s\",%s\r", sys.MQTT.server_name, sys.MQTT.port);       //Configurazione MQTT
-	SIM_Send_Command(command);
+	SIM_Send_Command("AT+CIPRXGET=0\r");                                                         //Impostazione ricezione automatica da server TCP
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
-	sprintf(command, "AT+SMCONF=\"CLIENTID\",\"%s\"\r", sys.MQTT.clientID);
-	SIM_Send_Command(command);
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	SIM_Send_Command("AT+SMCONF=\"KEEPTIME\",60\r");
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	sprintf(command, "AT+SMCONF=\"USERNAME\",\"%s\"\r", sys.MQTT.username);
-	SIM_Send_Command(command);
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	sprintf(command, "AT+SMCONF=\"PASSWORD\",\"%s\"\r", sys.MQTT.password);
-	SIM_Send_Command(command);
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	SIM_Send_Command("AT+SMCONF=\"QOS\",1\r");
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	SIM_Send_Command("AT+SMCONF=\"RETAIN\",0\r");
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	sprintf(command, "AT+SMCONF=\"TOPIC\",\"%s\"\r", sys.MQTT.Data_Topic);
-	SIM_Send_Command(command);
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	SIM_Send_Command("AT+SMCONN\r");                                                              //Connessione al broker MQTT
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	SIM_Send_Command("AT+SMSTATE?\r");                                                            //Verifica connessione al broker MQTT
-	SIM_Receive_Response(response);
-	while(!SIM_Check_MQTT_State(response))
-	{
-		SIM_Send_Command("AT+SMSTATE?\r");
-		SIM_Receive_Response(response);
-		HAL_Delay(1000);
-	}
-
-	sprintf(command, "AT+SMSUB=\"%s\",1\r", sys.MQTT.Command_Topic);                              //Iscrizione al topic per ricezione comandi dal server
-	SIM_Send_Command(command);
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	SIM_Send_Command("AT+CIPRXGET=1\r");                                                         //Impostazione ricezione manuale da server TCP
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	sprintf(command, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);        //Connessione TCP
+	sprintf(command, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);       //Connessione TCP
 	SIM_Send_Command(command);
 	if(SIM_Wait_Response("CONNECT OK") != HAL_OK) return -1;
 
@@ -224,7 +181,7 @@ uint16_t SIM_Receive_Response(char* response)
 	uint16_t max_size = 256;
 	uint16_t RxLen = 0;
 
-	HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t *)response, max_size, &RxLen, 1000);
+	HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t *)response, max_size, &RxLen, 2000);
 	return RxLen;
 }
 
@@ -270,136 +227,137 @@ int SIM_Check_TCP_State(const char* response)
 /*------PARSING MESSAGGIO MQTT------*/
 void SIM_Parse_Command(void)
 {
-    char* buf = (char*)sim_rx_buffer;
+	char* buf = (char*)sim_rx_buffer;
 
-    if(strncmp(buf, "+SMSUB: ", 8) == 0)
-    {
-        char* pos = buf + 8;
+	if(strncmp(buf, "+CMD,", 5) == 0)
+	{
+		char* pos = buf + 5;
+		// Estrai il valore del comando (cmd_val) come stringa
+		char cmd_str[8] = {0};
+		int i = 0;
+		while(pos[i] != ',' && pos[i] != '\0' && i < 7) 
+		{
+			cmd_str[i] = pos[i];
+			i++;
+		}
+		cmd_str[i] = '\0';
 
-        char* first_quote = strchr(pos, '"');
-        if(first_quote) {
-            char* second_quote = strchr(first_quote + 1, '"');
+		// Avanza oltre la virgola per eventuale parsing successivo
+		char* data_pos = pos + i;
+		if(*data_pos == ',') data_pos++;
 
-            if(second_quote) {
-                char* third_quote = strchr(second_quote + 1, '"');
-
-                if(third_quote) {
-                    char* cmd_pos = third_quote + 1;
-                    char* fourth_quote = strchr(cmd_pos, '"');
-
-                    if(fourth_quote && (fourth_quote - cmd_pos) >= 3) {
-
-                        uint32_t cmd_val = (cmd_pos[2] << 16) | (cmd_pos[1] << 8) | cmd_pos[0];
-
-                        switch(cmd_val) {
-							case 0x4C4449: // IDL
-								flags.CMD.Idle = 1; 
-								break;    
-							case 0x545253: // SRT
-								flags.CMD.Start_Meas = 1; 
-								break;
-                            case 0x474E50: // PNG
-								flags.CMD.Ping = 1; 
-								break;
-                            case 0x444E53: // SND
-								flags.CMD.Data_Request = 1; 
-								break;
-							case 0x52534D: // MSR
-								if(!flags.CMD.Measure_Request)
-								{
-									LED_Start(RED_LED, FAST, LOW);
-									Send_Measure_Addr = Saved_Bytes;
-									flags.CMD.Measure_Request = 1; 
-									Switch_Buffer();
-								}
-								break;
-                            case 0x41544F: // OTA
-								if(state == IDLE)
-								{
-									flags.CMD.Start_OTA = 1;
-								} 
-								break;
-							case 0x544553: // SET
-								if(state == IDLE)
-								{
-									flags.CMD.Set_Config = 1;
-									SIM_Parse_Cfg(cmd_pos, fourth_quote);
-								}
-							case 0x544547: // GET
-								if(state == IDLE)
-								{
-									flags.CMD.Get_Config = 1;
-									SIM_Get_Cfg(cmd_pos, fourth_quote);
-								}
-							case 0x545352: // RST
-								HAL_NVIC_SystemReset();
-								break;
-							default: 
-								break;
-                        }
-                    }
-                }
-            }
-        }
-    }
+		if(strcmp(cmd_str, "IDL") == 0) 
+		{
+			flags.CMD.Idle = 1;
+		} 
+		else if(strcmp(cmd_str, "SRT") == 0) 
+		{
+			flags.CMD.Start_Meas = 1;
+		} 
+		else if(strcmp(cmd_str, "PNG") == 0) 
+		{
+			flags.CMD.Ping = 1;
+		} 
+		else if(strcmp(cmd_str, "SND") == 0) 
+		{
+			flags.CMD.Data_Request = 1;
+		} 
+		else if(strcmp(cmd_str, "MSR") == 0) 
+		{
+			if(!flags.CMD.Measure_Request) 
+			{
+				LED_Start(RED_LED, FAST, LOW);
+				Send_Measure_Addr = Saved_Bytes;
+				flags.CMD.Measure_Request = 1;
+				Switch_Buffer();
+			}
+		} 
+		else if(strcmp(cmd_str, "OTA") == 0) 
+		{
+			if(state == IDLE) 
+			{
+				flags.CMD.Start_OTA = 1;
+			}
+		} 
+		else if(strcmp(cmd_str, "SET") == 0) 
+		{
+			if(state == IDLE) 
+			{
+				flags.CMD.Set_Config = 1;
+				SIM_Parse_Cfg(data_pos); 
+			}
+		} 
+		else if(strcmp(cmd_str, "GET") == 0) 
+		{
+			if(state == IDLE) 
+			{
+				flags.CMD.Get_Config = 1;
+				SIM_Get_Cfg(data_pos);
+			}
+		} 
+		else if(strcmp(cmd_str, "RST") == 0) 
+		{
+			HAL_NVIC_SystemReset();
+		}
+	}
 }
 
 /*-----PARSING CONFIGURAZIONE-----*/
-void SIM_Parse_Cfg(char* cmd_start, char* cmd_end)
+void SIM_Parse_Cfg(char* cmd_start)
 {   
     memset(cfg_var, 0, sizeof(cfg_var));
     memset(new_cfg_val, 0, sizeof(new_cfg_val));
     
-    char* pos = cmd_start + 4; // Salta "SET,"
-    
-    // Prima virgola (dopo SET)
-    char* comma1 = strchr(pos, ',');
-    if(!comma1 || comma1 >= cmd_end) return;
-    
-    // Seconda virgola
-    char* comma2 = strchr(comma1 + 1, ',');
-    if(!comma2 || comma2 >= cmd_end) return;
-    
-    // Terza virgola
-    char* comma3 = strchr(comma2 + 1, ',');
-    if(!comma3 || comma3 >= cmd_end) return;
-    
-    // Estrai cfg_var (tra SET, e prima virgola)
-    int var_len = comma2 - comma1 - 1;
-    if(var_len > 0 && var_len < sizeof(cfg_var)) 
+	char* pos = cmd_start + 4; // Salta "SET,"
+
+	// Prima virgola (dopo SET)
+	char* comma1 = strchr(pos, ',');
+	if(!comma1) return;
+
+	// Seconda virgola
+	char* comma2 = strchr(comma1 + 1, ',');
+	if(!comma2) return;
+
+	// Terza virgola
+	char* comma3 = strchr(comma2 + 1, ',');
+	if(!comma3) return;
+
+	// Estrai cfg_var (tra SET, e prima virgola)
+	int var_len = comma2 - comma1 - 1;
+	if(var_len > 0 && var_len < sizeof(cfg_var)) 
 	{
-        strncpy(cfg_var, comma1 + 1, var_len);
-        cfg_var[var_len] = '\0';
-    }
-    
-    // Estrai cfg_idx
-    cfg_idx = atoi(comma2 + 1);
-    
-    // Estrai new_cfg_val
-    int val_len = cmd_end - comma3 - 1;
-    if(val_len > 0 && val_len < sizeof(new_cfg_val)) 
+		strncpy(cfg_var, comma1 + 1, var_len);
+		cfg_var[var_len] = '\0';
+	}
+
+	// Estrai cfg_idx
+	cfg_idx = atoi(comma2 + 1);
+
+	// Estrai new_cfg_val
+	int val_len = strlen(comma3 + 1);
+	if(val_len > 0 && val_len < sizeof(new_cfg_val)) 
 	{
-        strncpy(new_cfg_val, comma3 + 1, val_len);
-        new_cfg_val[val_len] = '\0';
-    }
+		strncpy(new_cfg_val, comma3 + 1, val_len);
+		new_cfg_val[val_len] = '\0';
+	}
 }
 
 /*-----RECUPERO VALORE DI CONFIGURAZIONE-----*/
-void SIM_Get_Cfg(char* cmd_start, char* cmd_end)
+void SIM_Get_Cfg(char* cmd_start)
 {   
 	memset(cfg_var, 0, sizeof(cfg_var));
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));
 	
 	char* pos = cmd_start + 4; // Salta "GET,"
-	
+
 	// Prima virgola (dopo GET)
 	char* comma1 = strchr(pos, ',');
-	if(!comma1 || comma1 >= cmd_end) return;
-	
+	if(!comma1) return;
+
 	// Seconda virgola
 	char* comma2 = strchr(comma1 + 1, ',');
-	if(!comma2 || comma2 >= cmd_end) return;
-	
+	if(!comma2) return;
+
 	// Estrai cfg_var (tra GET, e prima virgola)
 	int var_len = comma2 - comma1 - 1;
 	if(var_len > 0 && var_len < sizeof(cfg_var)) 
@@ -407,7 +365,7 @@ void SIM_Get_Cfg(char* cmd_start, char* cmd_end)
 		strncpy(cfg_var, comma1 + 1, var_len);
 		cfg_var[var_len] = '\0';
 	}
-	
+
 	// Estrai cfg_idx
 	cfg_idx = atoi(comma2 + 1);
 }
@@ -452,9 +410,10 @@ void SIM_publish_MQTT_Message(const char* topic, const char* message)
 }
 
 /*-----INVIO DATI AL SERVER TCP-----*/
-void SIM_Send_TCP_Chunk(uint8_t* data, uint16_t size)
+void SIM_Send_TCP(uint8_t* data)
 {
     char cmd[50];
+	uint16_t size = (uint16_t)strlen(data);
 
     sprintf(cmd, "AT+CIPSEND=%u\r", size);
     SIM_Send_Command(cmd);
@@ -467,7 +426,7 @@ void SIM_Send_TCP_Chunk(uint8_t* data, uint16_t size)
 }
 
 /*-----INVIO DATI AL SERVER TCP CON DMA-----*/
-void SIM_Send_TCP_Chunk_DMA(uint8_t* data, uint16_t size)
+void SIM_Send_TCP_Chunk_DMA(uint16_t size)
 {
     char cmd[50];
 
@@ -528,15 +487,6 @@ void SIM_Check_Connection(void)
 	char command_sim[256];
 	char response_sim[256];
 
-	SIM_Send_Command("AT+SMSTATE?\r");                                                            
-	SIM_Receive_Response(response_sim);
-	while(!SIM_Check_MQTT_State(response_sim))
-	{
-		SIM_Send_Command("AT+SMCONN\r");                                                              
-		SIM_Wait_Response("OK");
-		SIM_Send_Command("AT+SMSTATE?\r");                                                            
-		SIM_Receive_Response(response_sim);
-	}
 	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
 	SIM_Receive_Response(response_sim);
 	while(!SIM_Check_TCP_State(response_sim))

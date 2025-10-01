@@ -74,7 +74,7 @@ typedef struct {
 	uint8_t Threshold_Detected : 1;
 	uint8_t BC_Interrupt : 1;
 	uint8_t ACC_Complete : 1;
-	uint8_t MQTT_Message_Rx : 1;
+	uint8_t Message_Rx : 1;
     uint8_t MQTT_ReadytoSend : 1;
     uint8_t TCP_ReadytoSend : 1;
     uint8_t TCP_isSending : 1;

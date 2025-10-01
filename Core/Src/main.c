@@ -103,7 +103,7 @@ Acceleration_Data_TypeDef Last_Acceleration = {0};
 uint16_t Temperature = 0;
 uint16_t Vbatt = 0;
 
-char MQTT_Logging[100] = {0};
+char Data_Logging[100] = {0};
 uint8_t Saving_Buffer[SAVING_BUFFER_LEN] = {0};
 int Address_Offset = 0;
 
@@ -255,11 +255,11 @@ int main(void)
 		switch(state)
 		{
 		case IDLE:
-			if(flags.MQTT_Message_Rx)
+			if(flags.Message_Rx)
 			{
 				LED_Start(RED_LED, MEDIUM, HIGH);
 				SIM_Parse_Command();
-				flags.MQTT_Message_Rx = 0;
+				flags.Message_Rx = 0;
 				if(flags.CMD.Start_Meas)
 				{
 					state = MEASURE_INIT_STATE;
@@ -315,17 +315,17 @@ int main(void)
 					BC_Manage_Interrupts(sys.BC_Flags);
 					flags.BC_Interrupt = 0;
 				}
-				if(flags.MQTT_Message_Rx)
+				if(flags.Message_Rx)
 				{
 					SIM_Parse_Command();
 					flags.SIM_isConnected = 1;
-					flags.MQTT_Message_Rx = 0;
+					flags.Message_Rx = 0;
 				}
 				if(flags.CMD.Data_Request)
 				{
 					LED_Start(ORG_LED, FAST, HIGH);
-					sprintf(MQTT_Logging, "%u,%u,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Vbatt, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
-					SIM_publish_MQTT_Message_DMA(NULL, MQTT_Logging);
+					sprintf(Data_Logging, "%u,%u,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Vbatt, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+					SIM_Send_TCP_Chunk_DMA(strlen(Data_Logging));
 					sys.SIM_Prompt_Status = HAL_GetTick();
 					flags.CMD.Data_Request = 0;
 				}
@@ -359,7 +359,7 @@ int main(void)
 				}
 				if(flags.MQTT_ReadytoSend)
 				{
-					SIM_Send_Command_DMA(MQTT_Logging);
+					SIM_Send_Command_DMA(Data_Logging);
 					LED_Stop(ORG_LED);
 					flags.MQTT_ReadytoSend = 0;
 				}
@@ -387,18 +387,34 @@ int main(void)
 			if(OTA_Init() == HAL_OK)
 			{
 				HAL_UART_DMAStop(SIM_UART);
-				HAL_Delay(100);
-				SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_READY");
+				memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
+
+				SIM_Send_TCP("OTA_READY");
 				if(OTA_Receive() == HAL_OK)
 				{
-					SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_RECEIVED");
+					SIM_Send_TCP("OTA_RECEIVED");
 					if(OTA_CRC_Check() == HAL_OK)
 					{
-						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_CRC_OK");
+						SIM_Send_TCP("OTA_CRC_OK");
+						if(OTA_Apply() == HAL_OK)
+						{
+							SIM_Send_TCP("OTA_SUCCESS");
+							HAL_Delay(500);
+							NVIC_SystemReset();
+						}
+						else
+						{
+							SIM_Send_TCP("OTA_APPLY_ERROR");
+							HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+							LED_Stop(ORG_LED);
+							LED_Stop(RED_LED);
+							LED_Start(GRN_LED, MEDIUM, HALF);
+							state = IDLE;
+						}
 					}
 					else
 					{
-						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_CRC_ERROR");
+						SIM_Send_TCP("OTA_CRC_ERROR");
 						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 						LED_Stop(ORG_LED);
 						LED_Stop(RED_LED);
@@ -407,25 +423,10 @@ int main(void)
 						break;
 					}
 
-					if(OTA_Apply() == HAL_OK)
-					{
-						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_SUCCESS");
-						HAL_Delay(500);
-						NVIC_SystemReset();
-					}
-					else
-					{
-						SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_APPLY_ERROR");
-						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
-						LED_Stop(ORG_LED);
-						LED_Stop(RED_LED);
-						LED_Start(GRN_LED, MEDIUM, HALF);
-						state = IDLE;
-					}
 				}
 				else
 				{
-					SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_RECEIVE_ERROR");
+					SIM_Send_TCP("OTA_RECEIVE_ERROR");
 					HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 					LED_Stop(ORG_LED);
 					LED_Stop(RED_LED);
@@ -435,7 +436,7 @@ int main(void)
 			}
 			else
 			{
-				SIM_publish_MQTT_Message(sys.MQTT.OTA_Topic, "OTA_INIT_ERROR");
+				SIM_Send_TCP("OTA_INIT_ERROR");
 				HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 				LED_Stop(ORG_LED);
 				LED_Stop(RED_LED);

@@ -72,7 +72,7 @@ extern Acceleration_Data_TypeDef Last_Acceleration;
 extern uint16_t Temperature;
 extern uint16_t Vbatt;
 
-extern char MQTT_Logging[100];
+extern char Data_Logging[100];
 extern uint8_t Saving_Buffer[SAVING_BUFFER_LEN];
 extern int Address_Offset;
 

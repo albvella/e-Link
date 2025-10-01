@@ -319,7 +319,7 @@ uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t 
     {
         // Codifica in base64
         size_t b64_len = Base64_Encode(raw_buffer, raw_fill, (char*)tcp_chunk, sizeof(tcp_chunk));
-        SIM_Send_TCP_Chunk_DMA(tcp_chunk, b64_len);
+        SIM_Send_TCP_Chunk_DMA(b64_len);
     }
 
     if (address == end_address) 
@@ -632,7 +632,7 @@ void Get_Config(void)
 	cfg_idx = 0;
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));	
 
-	SIM_publish_MQTT_Message(topic, value_str);
+	SIM_Send_TCP(value_str);
 }
 
 /*-----AZZERAMENTO FLAG-----*/

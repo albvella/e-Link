@@ -78,23 +78,24 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 			}
 		}
 
-		else if(*(uint32_t*)sim_rx_buffer == 0x534D532B &&           // "+SMS"
-				*(uint32_t*)(sim_rx_buffer + 4) == 0x203A4255)       // "UB: "
-		{     
-			flags.MQTT_Message_Rx = 1;
-		}
-
-		else if(*(uint32_t*)sim_rx_buffer == 0x444E4553 &&           // "SEND"
-       			*(uint32_t*)(sim_rx_buffer + 4) == 0x004B204F)       // " OK\0"
+		else if(*(uint32_t*)sim_rx_buffer == 0x444E4553 &&              // "SEND"
+				   *(uint32_t*)(sim_rx_buffer + 4) == 0x004B204F)       // " OK\0"
 		{
 			flags.TCP_isSending = 0;
 		}
 
-		else if(*(uint32_t*)sim_rx_buffer == 0x4552524F)            //"ERRO"
+		else if(*(uint32_t*)sim_rx_buffer == 0x4552524F)                 //"ERRO"
 		{
 			flags.MQTT_ReadytoSend = 0;
 			sys.SIM_Prompt_Status = 0;
 		}
+
+		else if(*(uint32_t*)sim_rx_buffer == 0x444D432B)                     // "+CMD"
+		{     
+			flags.Message_Rx = 1;
+		}
+
+
 	}
 	
 	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);

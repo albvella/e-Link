@@ -63,6 +63,9 @@ class eLinkMQTTBroker:
         Format: <Comando>,<cfg_var>,<cfg_idx>,<cfg_val>
         If only command is provided, sends just the command.
         """
+        if command not in self.allowed_commands:
+            print(f"Comando non valido: {command}")
+            return False
         if cfg_var is not None and cfg_idx is not None and cfg_val is not None:
             payload = f"{command},{cfg_var},{cfg_idx},{cfg_val}"
         else:
@@ -97,44 +100,52 @@ class eLinkMQTTCallbacks:
         self.press_FS = 50
 
     def data_callback(self, msg):
-        parts = msg.split(",")
-        data = {
-            "ID" : int(parts[0]),
-            "Press": int(parts[1]) * self.press_FS / 4096,
-            "FLow": self.clock_freq / int(parts[2]),
-            "ax": int(parts[3]) * 0.061,
-            "ay": int(parts[4]) * 0.061,
-            "az": int(parts[5]) * 0.061,
-            "Vbatt": int(parts[6]) * 0.001,
-            "I1": (((int(parts[7]) >>3) if int(parts[7]) < 0x8000 else (int(parts[7]) - 0x10000) >>3) * 0.00004 / 0.08),
-            "I2": (((int(parts[8]) >>3) if int(parts[8]) < 0x8000 else (int(parts[8]) - 0x10000) >>3) * 0.00004 / 0.08),
-            "I3": (((int(parts[9]) >>3) if int(parts[9]) < 0x8000 else (int(parts[9]) - 0x10000) >>3) * 0.00004 / 0.08),
-            "V1": int(parts[10]) * 0.008,
-            "V2": int(parts[11]) * 0.008,
-            "V3": int(parts[12]) * 0.008,
-            "Temp": int(parts[13]) * 0.0625 if int(parts[13]) < 0x8000 else (int(parts[13]) - 0x10000) * 0.0625
-        }
-        self.last_data = data
+        try:
+            parts = msg.split(",")
+            data = {
+                "ID" : int(parts[0]),
+                "Press": int(parts[1]) * self.press_FS / 4096,
+                "FLow": self.clock_freq / int(parts[2]),
+                "ax": int(parts[3]) * 0.061,
+                "ay": int(parts[4]) * 0.061,
+                "az": int(parts[5]) * 0.061,
+                "Vbatt": int(parts[6]) * 0.001,
+                "I1": (((int(parts[7]) >>3) if int(parts[7]) < 0x8000 else (int(parts[7]) - 0x10000) >>3) * 0.00004 / 0.08),
+                "I2": (((int(parts[8]) >>3) if int(parts[8]) < 0x8000 else (int(parts[8]) - 0x10000) >>3) * 0.00004 / 0.08),
+                "I3": (((int(parts[9]) >>3) if int(parts[9]) < 0x8000 else (int(parts[9]) - 0x10000) >>3) * 0.00004 / 0.08),
+                "V1": int(parts[10]) * 0.008,
+                "V2": int(parts[11]) * 0.008,
+                "V3": int(parts[12]) * 0.008,
+                "Temp": int(parts[13]) * 0.0625 if int(parts[13]) < 0x8000 else (int(parts[13]) - 0x10000) * 0.0625
+            }
+            self.last_data = data
+        except Exception as e:
+            print(f"Data parse error: {e}")
+            self.last_data = msg
 
     def info_callback(self, msg):
         if len(msg) > 10:
-            parts = msg.split(",")
-            status = {
-                "ID": int(parts[0]),
-                "Firmware Version": float(f"{int(parts[1]) >> 8}.{int(parts[1]) & 0xFF}"),
-                "Uptime": datetime(year=int(parts[2]), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
-                "Vbatt": int(parts[8]) * 0.001,
-                "Sampling Freq": int(parts[9]),
-                "Buffering Secs": int(parts[10]),
-                "V1": int(parts[11]) * 0.008,
-                "V2": int(parts[12]) * 0.008,
-                "V3": int(parts[13]) * 0.008,
-                "I1": (((int(parts[14]) >> 3) if int(parts[14]) < 0x8000 else (int(parts[14]) - 0x10000) >> 3) * 0.00004 / 0.08),
-                "I2": (((int(parts[15]) >> 3) if int(parts[15]) < 0x8000 else (int(parts[15]) - 0x10000) >> 3) * 0.00004 / 0.08),
-                "I3": (((int(parts[16]) >> 3) if int(parts[16]) < 0x8000 else (int(parts[16]) - 0x10000) >> 3) * 0.00004 / 0.08),
-                "Temp": (int(parts[17]) * 0.0625 if int(parts[17]) < 0x8000 else (int(parts[17]) - 0x10000) * 0.0625)
-            }
-            self.last_info = status
+            try:
+                parts = msg.split(",")
+                status = {
+                    "ID": int(parts[0]),
+                    "Firmware Version": float(f"{int(parts[1]) >> 8}.{int(parts[1]) & 0xFF}"),
+                    "Uptime": datetime(year=int(parts[2]), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
+                    "Vbatt": int(parts[8]) * 0.001,
+                    "Sampling Freq": int(parts[9]),
+                    "Buffering Secs": int(parts[10]),
+                    "V1": int(parts[11]) * 0.008,
+                    "V2": int(parts[12]) * 0.008,
+                    "V3": int(parts[13]) * 0.008,
+                    "I1": (((int(parts[14]) >> 3) if int(parts[14]) < 0x8000 else (int(parts[14]) - 0x10000) >> 3) * 0.00004 / 0.08),
+                    "I2": (((int(parts[15]) >> 3) if int(parts[15]) < 0x8000 else (int(parts[15]) - 0x10000) >> 3) * 0.00004 / 0.08),
+                    "I3": (((int(parts[16]) >> 3) if int(parts[16]) < 0x8000 else (int(parts[16]) - 0x10000) >> 3) * 0.00004 / 0.08),
+                    "Temp": (int(parts[17]) * 0.0625 if int(parts[17]) < 0x8000 else (int(parts[17]) - 0x10000) * 0.0625)
+                }
+                self.last_info = status
+            except Exception as e:
+                print(f"Info parse error: {e}")
+                self.last_info = msg
         else:
             self.last_info = msg  
 

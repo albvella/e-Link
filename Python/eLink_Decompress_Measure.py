@@ -1,5 +1,5 @@
 import struct
-from typing import List, Tuple
+from typing import List
 
 class eLink_Decompress_Measure:
     def __init__(self, bin_path: str):
@@ -12,7 +12,7 @@ class eLink_Decompress_Measure:
             data = f.read()
         offset = 0
         while offset + 6 <= len(data):
-            # Leggi header
+            # Leggi metadati
             pressure_size = struct.unpack_from('<H', data, offset)[0]
             flow_size = struct.unpack_from('<H', data, offset+2)[0]
             accel_size = struct.unpack_from('<H', data, offset+4)[0]
@@ -48,8 +48,7 @@ class eLink_Decompress_Measure:
             return out
 
     def _adpcm_decompress(self, comp_bytes: bytes, bits: int) -> List[int]:
-        # Decompressione ADPCM generica (pressione/volume)
-        # Usa tabelle coerenti con process.c
+        # Decompressione ADPCM generica
         if bits == 12:
             step_size_table = self._step_size_table_12bit()
         else:
@@ -159,6 +158,7 @@ class eLink_Decompress_Measure:
 
 
 if __name__ == "__main__":
-    decompressor = eLink_Decompress_Measure('data.bin')
+    compressed_filename = 'data.bin'
+    decompressor = eLink_Decompress_Measure(compressed_filename)
     for measure in decompressor.measures:
         print(measure)
