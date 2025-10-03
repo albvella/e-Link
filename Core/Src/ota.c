@@ -48,7 +48,7 @@ int OTA_Receive(void)
 
 	while (1)
 	{
-		Rx_Len = SIM_Receive_Response((char*)rx_buffer);
+		Rx_Len = SIM_Receive_Response((char*)rx_buffer, 5000);
 		if (rx_buffer[0] == '\0' || (rx_buffer[0] == '\r' && rx_buffer[1] == '\n'))
 		{
 			break;
@@ -86,7 +86,7 @@ int OTA_CRC_Check(void)
 	uint8_t rx_buffer[64];
 	uint32_t calc_crc = 0;
 
-	SIM_Receive_Response((char*)rx_buffer);
+	SIM_Receive_Response((char*)rx_buffer, 5000);
 	uint8_t crc_bin[8];
 	size_t crc_len = Base64_Decode((char*)rx_buffer, crc_bin, sizeof(crc_bin));
 	if (crc_len == 4)

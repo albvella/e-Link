@@ -16,7 +16,7 @@ void SIM_Reset(void);
 int SIM_Init(void);
 void SIM_Send_Command(char* command);
 void SIM_Send_Command_DMA(char* command);
-uint16_t SIM_Receive_Response(char* response);
+uint16_t SIM_Receive_Response(char* response, uint32_t timeout_ms);
 int SIM_Check_IP(const char* response);
 int SIM_Check_MQTT_State(const char* response);
 int SIM_Check_TCP_State(const char* response);

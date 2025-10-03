@@ -29,7 +29,7 @@ int Get_DateTime_From_Network(void)
 	RTC_TimeTypeDef sTime = {0};
 
 	SIM_Send_Command("AT+CCLK?\r");
-	SIM_Receive_Response(response);
+	SIM_Receive_Response(response, 5000);
 
     char* cclk_pos = strstr(response, "+CCLK: \"");
     if (cclk_pos == NULL)

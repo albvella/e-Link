@@ -20,6 +20,7 @@
 #define HALF     6
 #define LOW      7
 
+void LED_Init(void);
 void LED_Start(uint32_t LED, uint8_t freq, uint8_t duty);
 void LED_Stop(uint32_t LED);
 #endif /* INC_LEDS_H_ */

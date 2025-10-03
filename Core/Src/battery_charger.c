@@ -25,6 +25,8 @@ void BC_Init(void)
 	BC_Write_Reg(REG2B_CHARGER_MASK_3, 0x1F);                   //Interrupt attivati: nessuno
 	BC_Write_Reg(REG2C_FAULT_MASK_0, 0xFC);                     //Interrupt attivati: VAC2 over-voltage, VAC1 over-voltage
 	BC_Write_Reg(REG2D_FAULT_MASK_1, 0xF4);                     //Interrupt attivati: nessuno
+
+	BC_MultiRead_Reg(REG3B_VBAT_ADC, &Vbatt);
 }
 
 /*------SCRITTURA REGISTRO 8 BIT------*/

@@ -173,6 +173,8 @@ void Error_Handler(void);
 #define USR_BTN_GPIO_Port GPIOC
 #define DBG_Pin GPIO_PIN_3
 #define DBG_GPIO_Port GPIOC
+#define LTE_STATUS_Pin GPIO_PIN_3
+#define LTE_STATUS_GPIO_Port GPIOA
 #define FLASH_nCS_Pin GPIO_PIN_12
 #define FLASH_nCS_GPIO_Port GPIOB
 #define FLASH_nWP_Pin GPIO_PIN_6

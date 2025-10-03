@@ -24,6 +24,7 @@ void System_Init(void)
 	acc.read_reg = acc_read;
 	acc.handle = &hspi3;
 
+	LED_Init();	
 	LED_Start(GRN_LED, FAST, HIGH);
 
 	BC_Init();
@@ -53,8 +54,8 @@ void FatFS_Init(void)
 	{
 		sys.RAM_Mounted = 0;
 		
-		mkfs_opt.fmt = FM_FAT32;
-		mkfs_opt.au_size = 1024; 
+		mkfs_opt.fmt = FM_FAT;
+		mkfs_opt.au_size = 1024;
 		mkfs_opt.n_fat = 1;
 		mkfs_opt.align = 1;
 
@@ -84,7 +85,7 @@ void FatFS_Init(void)
 		if (fRes == FR_NO_FILESYSTEM)
 		{
 			memset((void *)&mkfs_opt, 0, sizeof(mkfs_opt));
-			mkfs_opt.fmt = FM_FAT32;
+			mkfs_opt.fmt = FM_FAT;
 			mkfs_opt.au_size = 4096;    
 			mkfs_opt.n_fat = 1;
 			mkfs_opt.align = 1;

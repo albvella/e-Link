@@ -1,7 +1,7 @@
 ../Core/Src/battery_charger.c:14:6:BC_Init	1
-../Core/Src/battery_charger.c:31:5:BC_Write_Reg	2
-../Core/Src/battery_charger.c:47:5:BC_Read_Reg	3
-../Core/Src/battery_charger.c:63:5:BC_MultiWrite_Reg	2
-../Core/Src/battery_charger.c:80:5:BC_MultiRead_Reg	3
-../Core/Src/battery_charger.c:98:5:BC_Read_Flags	3
-../Core/Src/battery_charger.c:117:6:BC_Manage_Interrupts	5
+../Core/Src/battery_charger.c:33:5:BC_Write_Reg	2
+../Core/Src/battery_charger.c:49:5:BC_Read_Reg	3
+../Core/Src/battery_charger.c:65:5:BC_MultiWrite_Reg	2
+../Core/Src/battery_charger.c:82:5:BC_MultiRead_Reg	3
+../Core/Src/battery_charger.c:100:5:BC_Read_Flags	3
+../Core/Src/battery_charger.c:119:6:BC_Manage_Interrupts	5

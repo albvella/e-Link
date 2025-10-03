@@ -21,7 +21,7 @@ int SIM_Init(void)
 {
 	char command[256];
 	char response[256];
-	sprintf(sys.apn, "a");
+	sprintf(sys.apn, "ibox.tim.it");
 	sprintf(sys.MQTT.clientID, "a");
 	sprintf(sys.MQTT.server_name, "a");
 	sprintf(sys.MQTT.port, "a");
@@ -34,11 +34,22 @@ int SIM_Init(void)
 	strcpy(sys.MQTT.OTA_Topic, config.ota_topic);
 	strcpy(sys.MQTT.Info_Topic, config.info_topic);
 
-	SIM_Power_On();
-	HAL_Delay(5000);
-
+	if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET)
+	{
+		SIM_Power_On();
+		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);            //Attesa accensione modulo
+		
+	}
+	SIM_Send_Command("ATE0\r");  
+	SIM_Wait_Response("OK");
+	
 	SIM_Send_Command("AT\r");                                                                     //Verifica comunicazione
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+	SIM_Receive_Response(response, 2000);
+	if(strstr(response, "OK") == NULL)
+	{
+		huart1.Init.BaudRate = 921600;
+		HAL_UART_Init(SIM_UART);
+	}
 
 	SIM_Send_Command("AT+IPR=921600\r");                                                          //Baudrate a 921600
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
@@ -52,14 +63,38 @@ int SIM_Init(void)
 	SIM_Send_Command("AT+CNMP=38\r");                                                             //Modalità solo LTE o NB-IoT
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
-	SIM_Send_Command("AT+CMNB=2\r");                                                              //NB-IoT
+	SIM_Send_Command("AT+CMNB=1\r");                                                              // 1=CAT-M, 2=NB-IoT
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
-	SIM_Send_Command("AT+NBSC=1\r");                                                              //Abilitazione scrambling feature DA VEDERE SE L'OPERATORE LA RICHIEDE
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+	SIM_Send_Command("AT+CPIN?\r");																  //Controllo PIN
+	SIM_Receive_Response(response, 5000);
+	if(strstr(response, "READY") == NULL)
+	{
+		if(strstr(response, "SIM PIN") != NULL)
+		{
+			SIM_Send_Command("AT+CPIN=0000\r");
+			SIM_Receive_Response(response, 5000);
+			if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+		}
+		else
+		{
+			return -1;
+		}
+	}
+
+
+	SIM_Send_Command("AT+CSQ\r");																  //Controllo qualità connessione
+	SIM_Receive_Response(response, 5000);
+
+	SIM_Send_Command("AT+COPS?\r");																  //Controllo modalità di connessione
+	SIM_Receive_Response(response, 5000);
+
+	SIM_Send_Command("AT+COPS=1,2,\"22201\"");
+	SIM_Receive_Response(response, 180000);
+//	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
 	SIM_Send_Command("AT+CEREG?\r");                                                              //Controllo registrazione alla rete
-	SIM_Receive_Response(response);
+	SIM_Receive_Response(response, 5000);
 	int stat = 0;
 	int n, stat_value;
 	if(strstr(response, "+CEREG: ") != NULL)
@@ -75,14 +110,14 @@ int SIM_Init(void)
 				 else
 				{
 					SIM_Send_Command("AT+CEREG?\r");
-					SIM_Receive_Response(response);
+					SIM_Receive_Response(response, 5000);
 					HAL_Delay(1000);
 				}
 			}
 			else  
 			{
 				SIM_Send_Command("AT+CEREG?\r");
-				SIM_Receive_Response(response);
+				SIM_Receive_Response(response, 5000);
 				HAL_Delay(1000);
 			}
 		}
@@ -91,26 +126,34 @@ int SIM_Init(void)
 
 	sprintf(command, "AT+CGDCONT=1,\"IP\",\"%s\"\r", sys.apn);                                    //Configurazione APN
 	SIM_Send_Command(command);
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+	SIM_Receive_Response(response, 5000);
+	if(strstr(response, "OK") != NULL)
+	{
+
+	}
+	else if(strstr(response, "ERROR") != NULL)
+	{
+
+	}
 
 	SIM_Send_Command("AT+CNACT=1\r");                                                             //Attivazione della rete
-	SIM_Receive_Response(response);
+	SIM_Receive_Response(response, 5000);
 	if(strstr(response, "+APP PDP: ACTIVE") == NULL)
 	{
 		while(strstr(response, "+APP PDP: ACTIVE") == NULL)
 		{
 			SIM_Send_Command("AT+CNACT=1\r");
-			SIM_Receive_Response(response);
+			SIM_Receive_Response(response, 5000);
 			HAL_Delay(1000);
 		}
 	}
 
 	SIM_Send_Command("AT+CNACT?\r");                                                              //Verifica indirizzo IP
-	SIM_Receive_Response(response);
+	SIM_Receive_Response(response, 5000);
 	while(!SIM_Check_IP(response))
 	{
 		SIM_Send_Command("AT+CNACT?\r");
-		SIM_Receive_Response(response);
+		SIM_Receive_Response(response, 5000);
 		HAL_Delay(1000);
 	}
 	
@@ -124,11 +167,11 @@ int SIM_Init(void)
 	if(SIM_Wait_Response("CONNECT OK") != HAL_OK) return -1;
 
 	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        //Verifica connessione al server TCP
-	SIM_Receive_Response(response);
+	SIM_Receive_Response(response, 5000);
 	while(!SIM_Check_TCP_State(response))
 	{
 		SIM_Send_Command("AT+CIPSTATUS=0\r");
-		SIM_Receive_Response(response);
+		SIM_Receive_Response(response, 5000);
 		HAL_Delay(1000);
 	}
 
@@ -139,7 +182,7 @@ int SIM_Init(void)
 void SIM_Power_On(void)
 {
 	HAL_GPIO_WritePin(LTE_POWER_ON_GPIO_Port, LTE_POWER_ON_Pin, GPIO_PIN_SET);
-	HAL_Delay(1000);
+	HAL_Delay(1500);
 	HAL_GPIO_WritePin(LTE_POWER_ON_GPIO_Port, LTE_POWER_ON_Pin, GPIO_PIN_RESET);
 }
 
@@ -176,12 +219,17 @@ void SIM_Send_Command_DMA(char* command)
 }
 
 /*------RICEZIONE RISPOSTA DAL MODULO LTE------*/
-uint16_t SIM_Receive_Response(char* response)
+uint16_t SIM_Receive_Response(char* rx, uint32_t timeout_ms)
 {
-	uint16_t max_size = 256;
 	uint16_t RxLen = 0;
+	uint32_t start_time = HAL_GetTick();
 
-	HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t *)response, max_size, &RxLen, 2000);
+	while ((HAL_GetTick() - start_time) < timeout_ms)
+	{
+		HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t *)rx, 256, &RxLen, 500);
+		if (RxLen > 0)
+			break;
+	}
 	return RxLen;
 }
 
@@ -462,18 +510,22 @@ void SIM_Send_Infos(void)
 /*-----ATTESA RISPOSTA-----*/
 int SIM_Wait_Response(const char* expected)
 {
-    char response[256];
+    char rx[256];
+    memset(rx, 0, sizeof(rx));
     uint16_t timeout = 10000; // 10 secondi
     uint32_t start_time = HAL_GetTick();
-    
+
     while((HAL_GetTick() - start_time) < timeout)
     {
         uint16_t RxLen = 0;
-        HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t*)response, sizeof(response), &RxLen, 500);
+        HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t*)rx, sizeof(rx), &RxLen, 500);
         
-        if(RxLen > 0 && strstr(response, expected) != NULL)
+        if(RxLen > 0)
         {
-            return 0; 
+        	if(strstr(rx, expected))
+        	{
+        		return 0;
+        	}
         }
         
         HAL_Delay(10);
@@ -488,13 +540,13 @@ void SIM_Check_Connection(void)
 	char response_sim[256];
 
 	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
-	SIM_Receive_Response(response_sim);
+	SIM_Receive_Response(response_sim, 5000);
 	while(!SIM_Check_TCP_State(response_sim))
 	{
 		sprintf(command_sim, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);       
 		SIM_Send_Command(command_sim);
 		SIM_Wait_Response("CONNECT OK");
 		SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
-		SIM_Receive_Response(response_sim);
+		SIM_Receive_Response(response_sim, 5000);
 	}
 }
