@@ -21,18 +21,13 @@ int SIM_Init(void)
 {
 	char command[256];
 	char response[256];
-	sprintf(sys.apn, "ibox.tim.it");
-	sprintf(sys.MQTT.clientID, "a");
-	sprintf(sys.MQTT.server_name, "a");
-	sprintf(sys.MQTT.port, "a");
-	sprintf(sys.MQTT.username, "a");
-	sprintf(sys.MQTT.password, "a");
+	sprintf(sys.apn, "iot.1nce.net");
+	strcpy(sys.TCP.IP_address, config.tcp_IPaddress);
+	strcpy(sys.TCP.Port, config.tcp_Port);
 	sprintf(sys.TCP.IP_address, "a");
 	sprintf(sys.TCP.Port, "a");
-	strcpy(sys.MQTT.Data_Topic, config.data_topic);
-	strcpy(sys.MQTT.Command_Topic, config.command_topic);
-	strcpy(sys.MQTT.OTA_Topic, config.ota_topic);
-	strcpy(sys.MQTT.Info_Topic, config.info_topic);
+
+	memset(response, 0, sizeof(response));
 
 	if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET)
 	{
@@ -40,22 +35,33 @@ int SIM_Init(void)
 		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);            //Attesa accensione modulo
 		
 	}
-	SIM_Send_Command("ATE0\r");  
-	SIM_Wait_Response("OK");
-	
+
 	SIM_Send_Command("AT\r");                                                                     //Verifica comunicazione
 	SIM_Receive_Response(response, 2000);
 	if(strstr(response, "OK") == NULL)
 	{
-		huart1.Init.BaudRate = 921600;
-		HAL_UART_Init(SIM_UART);
-	}
+		if(huart1.Init.BaudRate != 921600)
+		{
+			huart1.Init.BaudRate = 921600;
+			HAL_UART_Init(SIM_UART);
+			SIM_Send_Command("AT+IPR=921600\r");               						              //Baudrate a 921600
+			SIM_Wait_Response("OK");
+		}
+		else
+		{
+			huart1.Init.BaudRate = 38400;
+			HAL_UART_Init(SIM_UART);
+			return -1;
+		}
 
-	SIM_Send_Command("AT+IPR=921600\r");                                                          //Baudrate a 921600
-	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+	}
 
 	huart1.Init.BaudRate = 921600;
 	HAL_UART_Init(SIM_UART);
+
+	SIM_Send_Command("ATE0\r");                                                                   //Non verbose mode
+	SIM_Wait_Response("OK");
+
 
 	SIM_Send_Command("AT+CFUN=1\r");                                                              //Full functionality
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
@@ -63,7 +69,7 @@ int SIM_Init(void)
 	SIM_Send_Command("AT+CNMP=38\r");                                                             //Modalità solo LTE o NB-IoT
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
-	SIM_Send_Command("AT+CMNB=1\r");                                                              // 1=CAT-M, 2=NB-IoT
+	SIM_Send_Command("AT+CMNB=1\r");                                                              //1=CAT-M, 2=NB-IoT, 3=Automatico
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
 	SIM_Send_Command("AT+CPIN?\r");																  //Controllo PIN
@@ -85,55 +91,76 @@ int SIM_Init(void)
 
 	SIM_Send_Command("AT+CSQ\r");																  //Controllo qualità connessione
 	SIM_Receive_Response(response, 5000);
+	if(strstr(response, "+CSQ: 99") != NULL)
+	{
+		SIM_Power_Off();
+		return -1;
+	}
+
+	SIM_Send_Command("AT+CEREG?\r");                                                              //Controllo registrazione alla rete
+	SIM_Receive_Response(response, 5000);
+	char* cereg_ptr = strstr(response, "+CEREG:");
+	int n = 0, stat_value = 0;
+	if(cereg_ptr && sscanf(cereg_ptr, "+CEREG: %d,%d", &n, &stat_value) >= 2)
+	{
+		if(stat_value == 1 || stat_value == 5)
+		{
+			goto APN;
+		}
+	}
 
 	SIM_Send_Command("AT+COPS?\r");																  //Controllo modalità di connessione
 	SIM_Receive_Response(response, 5000);
 
-	SIM_Send_Command("AT+COPS=1,2,\"22201\"");
+	SIM_Send_Command("AT+COPS=?\r");
+	SIM_Receive_Response(response, 120000);
+
+	SIM_Send_Command("AT+COPS=0,0\r");                                                            // Miglior operatore disponibile. In caso di operatore fisso: AT+COPS=1,2,\"22201\" ---- 22201: TIM,  22210: Vodafone
 	SIM_Receive_Response(response, 180000);
 //	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
 	SIM_Send_Command("AT+CEREG?\r");                                                              //Controllo registrazione alla rete
 	SIM_Receive_Response(response, 5000);
 	int stat = 0;
-	int n, stat_value;
-	if(strstr(response, "+CEREG: ") != NULL)
+	while(stat != 1)
 	{
-		while(stat != 1)
+		char* cereg_ptr = strstr(response, "+CEREG:");
+		int n = 0, stat_value = 0;
+		if(cereg_ptr && sscanf(cereg_ptr, "+CEREG: %d,%d", &n, &stat_value) >= 2)
 		{
-			if(sscanf(response, "+CEREG: %d,%d", &n, &stat_value) >= 2) 
+			if(stat_value == 1 || stat_value == 5)
 			{
-				if(stat_value == 1 || stat_value == 5)
-			    {
-					 stat = 1;
-				}
-				 else
-				{
-					SIM_Send_Command("AT+CEREG?\r");
-					SIM_Receive_Response(response, 5000);
-					HAL_Delay(1000);
-				}
+				stat = 1;
 			}
-			else  
+			else
 			{
 				SIM_Send_Command("AT+CEREG?\r");
 				SIM_Receive_Response(response, 5000);
 				HAL_Delay(1000);
 			}
 		}
+		else
+		{
+			SIM_Send_Command("AT+CEREG?\r");
+			SIM_Receive_Response(response, 5000);
+			HAL_Delay(1000);
+		}
+	}
 
+	APN:
+	SIM_Send_Command("AT+CNACT?\r");                                                              //Verifica indirizzo IP
+	SIM_Receive_Response(response, 5000);
+	if(SIM_Check_IP(response))
+	{
+		goto TCP;
 	}
 
 	sprintf(command, "AT+CGDCONT=1,\"IP\",\"%s\"\r", sys.apn);                                    //Configurazione APN
 	SIM_Send_Command(command);
 	SIM_Receive_Response(response, 5000);
-	if(strstr(response, "OK") != NULL)
+	if(strstr(response, "ERROR") != NULL)
 	{
-
-	}
-	else if(strstr(response, "ERROR") != NULL)
-	{
-
+		return -1;
 	}
 
 	SIM_Send_Command("AT+CNACT=1\r");                                                             //Attivazione della rete
@@ -157,8 +184,7 @@ int SIM_Init(void)
 		HAL_Delay(1000);
 	}
 	
-	//MQTT ERA QUA
-
+	TCP:
 	SIM_Send_Command("AT+CIPRXGET=0\r");                                                         //Impostazione ricezione automatica da server TCP
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
@@ -237,13 +263,16 @@ uint16_t SIM_Receive_Response(char* rx, uint32_t timeout_ms)
 int SIM_Check_IP(const char* response)
 {
 	char* cnact_pos = strstr(response, "+CNACT:");
-    if(cnact_pos != NULL) {
-        int context_id, status;
-        if(sscanf(cnact_pos, "+CNACT: %d,%d", &context_id, &status) >= 2) {
-            return (context_id == 1 && status == 1) ? 1 : 0;
-        }
-    }
-    return 0;
+	if(cnact_pos != NULL) 
+	{
+		int status;
+		char ip_addr[32] = {0};
+		if(sscanf(cnact_pos, "+CNACT: %d,%31s", &status, ip_addr) == 2)
+		{
+			return (status == 1 && strlen(ip_addr) > 0) ? 1 : 0;
+		}
+	}
+	return 0;
 }
 
 /*------CONTROLLO STATO CONNESSIONE MQTT------*/
@@ -501,8 +530,9 @@ void SIM_Send_Infos(void)
 	sprintf(infos, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, fw_ver, sys.onDate.Year, sys.onDate.Month, sys.onDate.Date, sys.onTime.Hours, sys.onTime.Minutes, sys.onTime.Seconds, Vbatt, config.samp_freq, config.buffering_secs, Supply.v1, Supply.v2, Supply.v3, Supply.i1, Supply.i2, Supply.i3, Temperature);
 	len = (uint16_t)strlen(infos);
 
-	sprintf(command, "AT+SMPUB=\"%s\",%d,1,0\r", sys.MQTT.Info_Topic, len);
-	SIM_Wait_Response(">"); 
+	sprintf(command, "AT+CIPSEND=%u\r",len);
+	SIM_Send_Command(command);
+	SIM_Wait_Response(">");
 	HAL_UART_Transmit(SIM_UART, (uint8_t*)infos, len, 100);
 	SIM_Wait_Response("OK");
 }

@@ -31,7 +31,7 @@ void System_Init(void)
 	INA3221_Init();
 	FatFS_Init();
 	Config_Init();
-	Acc_Init(&acc);
+	Acc_Init(&acc, config.samp_freq);
 	LED_Start(ORG_LED, FAST, HALF);
 	while(SIM_Init() != HAL_OK);
 	LED_Stop(ORG_LED);
@@ -112,7 +112,7 @@ void FatFS_Init(void)
 }
 
 /*-----INIZiALIZZAZIONE ACCELEROMETRO-----*/
-void Acc_Init(stmdev_ctx_t* acc)
+int Acc_Init(stmdev_ctx_t* acc, uint16_t fs)
 {
 	lsm6dsv16x_reset_t rst;
 	lsm6dsv16x_pin_int_route_t pin_int = {0};
@@ -132,7 +132,7 @@ void Acc_Init(stmdev_ctx_t* acc)
 			{
 				sys.ACC_Present = 0;
 				flags.ACC_Complete = 1;
-				return;
+				return 0;
 			}
 		}
 	sys.ACC_Present = 1;
@@ -151,7 +151,18 @@ void Acc_Init(stmdev_ctx_t* acc)
 	lsm6dsv16x_fifo_mode_set(acc, LSM6DSV16X_BYPASS_MODE);
 	lsm6dsv16x_xl_data_rate_set(acc, LSM6DSV16X_ODR_OFF);
 	lsm6dsv16x_gy_data_rate_set(acc, LSM6DSV16X_ODR_OFF);
-	lsm6dsv16x_odr_trig_cfg_set(acc, 16);  //800SPS
+	if(fs == 1600)
+	{
+		lsm6dsv16x_odr_trig_cfg_set(acc, 32);  //800SPS
+	}
+	else if(fs == 800)
+	{
+		lsm6dsv16x_odr_trig_cfg_set(acc, 16);  //800SPS
+	}
+	else
+	{
+		return -1;
+	}
 	lsm6dsv16x_xl_mode_set(acc, LSM6DSV16X_XL_ODR_TRIGGERED_MD);
 	lsm6dsv16x_gy_mode_set(acc, LSM6DSV16X_GY_ODR_TRIGGERED_MD);
 	lsm6dsv16x_den_polarity_set(acc, LSM6DSV16X_DEN_ACT_HIGH);
@@ -162,6 +173,7 @@ void Acc_Init(stmdev_ctx_t* acc)
 	lsm6dsv16x_pin_int1_route_set(acc, &pin_int);
 
 	__HAL_GPIO_EXTI_CLEAR_IT(ACC_INTERRUPT);
+	return 0;
 }
 
 /*-----INIZiALIZZAZIONE CONFIGURAZIONE-----*/
@@ -185,17 +197,15 @@ void Config_Init(void)
 	config.samp_freq = 800;
 	config.buffering_secs = 30;
 	config.connection_timeout = 60000;
-	config.hammer_th = 2048;
+	config.hammer_th = 4096;
     for(int i = 0; i < 24; i++) 
 	{
         config.low_th[i] = 0;
         config.high_th[i] = 4096;
     }
-    strcpy(config.data_topic, "Data_Topic");
-    strcpy(config.command_topic, "Command_Topic");  
-    strcpy(config.ota_topic, "OTA_Topic");
-	strcpy(config.info_topic, "Info_Topic");
-    
+    strcpy(config.tcp_IPaddress, "0.0.0.0");
+    strcpy(config.tcp_Port, "8080");
+
     if (f_open(&config_file, CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
     {
         return;

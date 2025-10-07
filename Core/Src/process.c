@@ -20,6 +20,7 @@
 #include "battery_charger.h"
 #include "leds.h"
 #include "base64.h"
+#include "init.h"
 
 
 /*-----ACQUISIZIONE MISURE E LOG DEI DATI-----*/
@@ -184,6 +185,11 @@ void Start_Measure(void)
 	ADC_TIMER->Instance->ARR = (uint32_t)(SystemCoreClock / (ADC_TIMER->Instance->PSC * config.samp_freq)) - 1;
 	ACC_TIMER->Instance->ARR = (uint32_t)(config.samp_freq / 25) - 1;
 	ACC_TIMER->Instance->CCR3 = (uint32_t)((ACC_TIMER->Instance->ARR + 1) / 2);
+	if(Acc_Init(&acc, config.samp_freq) != HAL_OK)
+	{
+		state = IDLE;
+		return;
+	}
 
 	HAL_TIM_IC_Start_IT(VOLUME_TIMER, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(ACC_TIMER, TIM_CHANNEL_3);
@@ -529,30 +535,18 @@ void Apply_Config(void)
             config.low_th[cfg_idx] = (uint16_t)atoi(new_cfg_val);
         }
     }
-    else if(strcmp(cfg_var, "DATA_TOPIC") == 0) 
+    else if(strcmp(cfg_var, "TCP_IP") == 0)
 	{
-        strncpy(config.data_topic, new_cfg_val, sizeof(config.data_topic) - 1);
-        config.data_topic[sizeof(config.data_topic) - 1] = '\0';
-		strcpy(sys.MQTT.Data_Topic, config.data_topic);
+        strncpy(config.tcp_IPaddress, new_cfg_val, sizeof(config.tcp_IPaddress) - 1);
+        config.tcp_IPaddress[sizeof(config.tcp_IPaddress) - 1] = '\0';
+		strcpy(sys.TCP.IP_address, config.tcp_IPaddress);
     }
-    else if(strcmp(cfg_var, "CMD_TOPIC") == 0) 
+    else if(strcmp(cfg_var, "TCP_PORT") == 0)
 	{
-        strncpy(config.command_topic, new_cfg_val, sizeof(config.command_topic) - 1);
-        config.command_topic[sizeof(config.command_topic) - 1] = '\0';
-		strcpy(sys.MQTT.Command_Topic, config.command_topic);
+        strncpy(config.tcp_Port, new_cfg_val, sizeof(config.tcp_Port) - 1);
+        config.tcp_Port[sizeof(config.tcp_Port) - 1] = '\0';
+		strcpy(sys.TCP.Port, config.tcp_Port);
     }
-	else if(strcmp(cfg_var, "INFO_TOPIC") == 0)
-	{
-		strncpy(config.info_topic, new_cfg_val, sizeof(config.info_topic) - 1);
-		config.info_topic[sizeof(config.info_topic) - 1] = '\0';
-		strcpy(sys.MQTT.Info_Topic, config.info_topic);
-	}
-	else if(strcmp(cfg_var, "OTA_TOPIC") == 0)
-	{
-		strncpy(config.ota_topic, new_cfg_val, sizeof(config.ota_topic) - 1);
-		config.ota_topic[sizeof(config.ota_topic) - 1] = '\0';
-		strcpy(sys.MQTT.OTA_Topic, config.ota_topic);
-	}
 	else
 	{
 		return;
@@ -577,7 +571,6 @@ void Apply_Config(void)
 void Get_Config(void)
 {
 	char value_str[128] = {0};
-	const char* topic = sys.MQTT.Info_Topic;
 
 	if(strcmp(cfg_var, "DEVICE_ID") == 0)
 	{
@@ -607,21 +600,13 @@ void Get_Config(void)
 	{
 		sprintf(value_str, "%u", config.low_th[cfg_idx]);
 	}
-	else if(strcmp(cfg_var, "DATA_TOPIC") == 0)
+	else if(strcmp(cfg_var, "TCP_IP") == 0)
 	{
-		strncpy(value_str, config.data_topic, sizeof(value_str)-1);
+		strncpy(value_str, config.tcp_IPaddress, sizeof(value_str)-1);
 	}
-	else if(strcmp(cfg_var, "CMD_TOPIC") == 0)
+	else if(strcmp(cfg_var, "TCP_PORT") == 0)
 	{
-		strncpy(value_str, config.command_topic, sizeof(value_str)-1);
-	}
-	else if(strcmp(cfg_var, "INFO_TOPIC") == 0)
-	{
-		strncpy(value_str, config.info_topic, sizeof(value_str)-1);
-	}
-	else if(strcmp(cfg_var, "OTA_TOPIC") == 0)
-	{
-		strncpy(value_str, config.ota_topic, sizeof(value_str)-1);
+		strncpy(value_str, config.tcp_Port, sizeof(value_str)-1);
 	}
 	else
 	{
@@ -638,9 +623,14 @@ void Get_Config(void)
 /*-----AZZERAMENTO FLAG-----*/
 void Clear_Flags(void)
 {
-	memset(&sys, 0, sizeof(sys));
 	if(!sys.ACC_Present)
 	{
-		sys.ACC_Present = 1;
+		memset(&flags, 0, sizeof(flags));
+		flags.ACC_Complete = 1;
 	}
+	else
+	{
+		memset(&flags, 0, sizeof(flags));
+	}
+
 }

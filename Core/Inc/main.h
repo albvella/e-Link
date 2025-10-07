@@ -119,7 +119,6 @@ typedef struct {
     uint32_t Inactive_RAM_Len;
     uint32_t SIM_Prompt_Status;
     uint32_t SIM_Connection_Status;
-    MQTT_TypeDef MQTT;
     TCP_Typedef TCP;
 } System_Resources_Typedef;
 
@@ -131,10 +130,8 @@ typedef struct {
     uint16_t hammer_th;                    
     uint16_t low_th[24];                   
     uint16_t high_th[24];                  
-    char data_topic[64];                   
-    char command_topic[64];                
-    char ota_topic[64];   
-    char info_topic[64];                                        
+    char tcp_IPaddress[64];   
+    char tcp_Port[64];   
 } Config_Typedef;  
 
 typedef struct{

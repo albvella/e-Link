@@ -13,7 +13,7 @@
 
 void System_Init(void);
 void FatFS_Init(void);
-void Acc_Init(stmdev_ctx_t* acc);
+int Acc_Init(stmdev_ctx_t* acc, uint16_t fs);
 void RTC_Init(void);
 int Get_DateTime_From_Network(void);
 void Set_Default_DateTime(void);
