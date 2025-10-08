@@ -25,7 +25,7 @@ void SIM_Parse_Cfg(char* cmd_start);
 void SIM_Get_Cfg(char* cmd_start);
 void SIM_publish_MQTT_Message_DMA(const char* topic, const char* message);
 void SIM_publish_MQTT_Message(const char* topic, const char* message);
-void SIM_Send_TCP(uint8_t* data);
+void SIM_Send_TCP(char* data);
 void SIM_Send_TCP_Chunk_DMA(uint16_t size);
 void SIM_Send_Infos(void);
 int SIM_Wait_Response(const char* expected);

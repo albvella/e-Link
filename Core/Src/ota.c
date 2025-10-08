@@ -70,7 +70,7 @@ int OTA_Receive(void)
 			f_close(&sys.OTA_File);
 			return -1;
 		}
-		SIM_Send_TCP((uint8_t*)"ACK");
+		SIM_Send_TCP("ACK");
 	}
 
 	f_close(&sys.OTA_File);

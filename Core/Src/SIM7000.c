@@ -337,7 +337,14 @@ void SIM_Parse_Command(void)
 		} 
 		else if(strcmp(cmd_str, "SND") == 0) 
 		{
-			flags.CMD.Data_Request = 1;
+			if(strcmp(data_pos, "1") == 0)
+			{
+				flags.CMD.Data_Request = 1;
+			}
+			else if(strcmp(data_pos, "0") == 0)
+			{
+				flags.CMD.Data_Request = 0;
+			}
 		} 
 		else if(strcmp(cmd_str, "MSR") == 0) 
 		{
@@ -487,7 +494,7 @@ void SIM_publish_MQTT_Message(const char* topic, const char* message)
 }
 
 /*-----INVIO DATI AL SERVER TCP-----*/
-void SIM_Send_TCP(uint8_t* data)
+void SIM_Send_TCP(char* data)
 {
     char cmd[50];
 	uint16_t size = (uint16_t)strlen(data);
@@ -495,11 +502,11 @@ void SIM_Send_TCP(uint8_t* data)
     sprintf(cmd, "AT+CIPSEND=%u\r", size);
     SIM_Send_Command(cmd);
 
-    SIM_Wait_Response(">");                                    // Attesa prompt '>'
+    SIM_Wait_Response(">");
 
-    HAL_UART_Transmit(SIM_UART, data, size, 1000);             // Invia dati binari
+    HAL_UART_Transmit(SIM_UART, (uint8_t*)data, size, 1000);
     
-    SIM_Wait_Response("SEND OK");                              // Attesa invio avvenuto
+    SIM_Wait_Response("SEND OK");
 }
 
 /*-----INVIO DATI AL SERVER TCP CON DMA-----*/
@@ -527,7 +534,7 @@ void SIM_Send_Infos(void)
 	}
 	uint16_t fw_ver = FW_VERSION;
 
-	sprintf(infos, "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, fw_ver, sys.onDate.Year, sys.onDate.Month, sys.onDate.Date, sys.onTime.Hours, sys.onTime.Minutes, sys.onTime.Seconds, Vbatt, config.samp_freq, config.buffering_secs, Supply.v1, Supply.v2, Supply.v3, Supply.i1, Supply.i2, Supply.i3, Temperature);
+	sprintf(infos, "R:%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, fw_ver, sys.onDate.Year, sys.onDate.Month, sys.onDate.Date, sys.onTime.Hours, sys.onTime.Minutes, sys.onTime.Seconds, Vbatt, config.samp_freq, config.buffering_secs, Supply.v1, Supply.v2, Supply.v3, Supply.i1, Supply.i2, Supply.i3, Temperature);
 	len = (uint16_t)strlen(infos);
 
 	sprintf(command, "AT+CIPSEND=%u\r",len);
@@ -563,11 +570,28 @@ int SIM_Wait_Response(const char* expected)
 	return -1;
 }
 
-/*-----CONTROLLA STATO CONNESSIONE MQTT E TCP-----*/
+/*-----CONTROLLA STATO CONNESSIONE-----*/
 void SIM_Check_Connection(void)
 {
 	char command_sim[256];
 	char response_sim[256];
+
+	int registered = 0;
+    while(!registered)
+    {
+        SIM_Send_Command("AT+CEREG?\r");
+        SIM_Receive_Response(response_sim, 5000);
+        int n = 0, stat_value = 0;
+        char* cereg_ptr = strstr(response_sim, "+CEREG:");
+        if(cereg_ptr && sscanf(cereg_ptr, "+CEREG: %d,%d", &n, &stat_value) >= 2 && (stat_value == 1 || stat_value == 5))
+        {
+            registered = 1;
+        }
+        else
+        {
+            HAL_Delay(2000);
+        }
+    }
 
 	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
 	SIM_Receive_Response(response_sim, 5000);
@@ -578,5 +602,6 @@ void SIM_Check_Connection(void)
 		SIM_Wait_Response("CONNECT OK");
 		SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
 		SIM_Receive_Response(response_sim, 5000);
+		HAL_Delay(2000);
 	}
 }

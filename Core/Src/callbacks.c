@@ -67,13 +67,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	{
 		if(*(uint8_t*)sim_rx_buffer == '>')
 		{
-			if(flags.CMD.Measure_Request)
+			if(flags.Log_TransferInProgress)
 			{
-				flags.TCP_ReadytoSend = 1;
+				flags.Log_ReadytoSend = 1;
+				sys.SIM_Prompt_Status = 0;
 			}
-			else if(flags.CMD.Data_Request)
+			else if(flags.CMD.Measure_Request)
 			{
-				flags.MQTT_ReadytoSend = 1;
+				flags.Measure_ReadytoSend = 1;
 				sys.SIM_Prompt_Status = 0;
 			}
 		}
@@ -81,16 +82,23 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 		else if(*(uint32_t*)sim_rx_buffer == 0x444E4553 &&              // "SEND"
 				   *(uint32_t*)(sim_rx_buffer + 4) == 0x004B204F)       // " OK\0"
 		{
-			flags.TCP_isSending = 0;
+			if(flags.Log_TransferInProgress)
+			{
+				flags.Log_TransferInProgress = 0;
+			}
+			else if(flags.Meas_TransferInProgress)
+			{
+				flags.Meas_TransferInProgress = 0;
+			}
 		}
 
 		else if(*(uint32_t*)sim_rx_buffer == 0x4552524F)                 //"ERRO"
 		{
-			flags.MQTT_ReadytoSend = 0;
+			flags.Log_ReadytoSend = 0;
 			sys.SIM_Prompt_Status = 0;
 		}
 
-		else if(*(uint32_t*)sim_rx_buffer == 0x444D432B)                     // "+CMD"
+		else if(*(uint32_t*)sim_rx_buffer == 0x444D432B)                 // "+CMD"
 		{     
 			flags.Message_Rx = 1;
 		}

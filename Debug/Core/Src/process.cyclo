@@ -8,6 +8,6 @@
 ../Core/Src/process.c:266:10:Send_Measure_Chunk	13
 ../Core/Src/process.c:339:26:Compress_Sample	8
 ../Core/Src/process.c:434:9:ADPCM_Compression	8
-../Core/Src/process.c:479:6:Apply_Config	21
-../Core/Src/process.c:571:6:Get_Config	14
-../Core/Src/process.c:624:6:Clear_Flags	2
+../Core/Src/process.c:479:6:Apply_Config	22
+../Core/Src/process.c:575:6:Get_Config	15
+../Core/Src/process.c:632:6:Clear_Flags	2

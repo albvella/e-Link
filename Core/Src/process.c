@@ -330,7 +330,7 @@ uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t 
 
     if (address == end_address) 
     {
-        return 0;
+        return (uint32_t)-1;
     }
     return address;
 }
@@ -515,7 +515,11 @@ void Apply_Config(void)
 	}
 	else if(strcmp(cfg_var, "CONN_TIMEOUT") == 0)
 	{
-		config.connection_timeout = (uint32_t)atoi(new_cfg_val);
+		config.connection_timeout_ms = (uint32_t)atoi(new_cfg_val);
+	}
+	else if(strcmp(cfg_var, "LOG_PERIOD") == 0)
+	{
+		config.log_period_ms = (uint32_t)atoi(new_cfg_val);
 	}
 	else if(strcmp(cfg_var, "HAMMER_TH") == 0)
 	{
@@ -574,43 +578,47 @@ void Get_Config(void)
 
 	if(strcmp(cfg_var, "DEVICE_ID") == 0)
 	{
-		sprintf(value_str, "%u", config.device_id);
+		sprintf(value_str, "R:%u", config.device_id);
 	}
 	else if(strcmp(cfg_var, "SAMP_FREQ") == 0)
 	{
-		sprintf(value_str, "%u", config.samp_freq);
+		sprintf(value_str, "R:%u", config.samp_freq);
 	}
 	else if(strcmp(cfg_var, "BUFFER_SECS") == 0)
 	{
-		sprintf(value_str, "%u", config.buffering_secs);
+		sprintf(value_str, "R:%u", config.buffering_secs);
 	}
 	else if(strcmp(cfg_var, "CONN_TIMEOUT") == 0)
 	{
-		sprintf(value_str, "%lu", config.connection_timeout);
+		sprintf(value_str, "R:%lu", config.connection_timeout_ms);
+	}
+	else if(strcmp(cfg_var, "LOG_PERIOD") == 0)
+	{
+		sprintf(value_str, "R:%lu", config.log_period_ms);
 	}
 	else if(strcmp(cfg_var, "HAMMER_TH") == 0)
 	{
-		sprintf(value_str, "%u", config.hammer_th);
+		sprintf(value_str, "R:%u", config.hammer_th);
 	}
 	else if(strcmp(cfg_var, "HIGH_TH") == 0 && cfg_idx >= 0 && cfg_idx < 24)
 	{
-		sprintf(value_str, "%u", config.high_th[cfg_idx]);
+		sprintf(value_str, "R:%u", config.high_th[cfg_idx]);
 	}
 	else if(strcmp(cfg_var, "LOW_TH") == 0 && cfg_idx >= 0 && cfg_idx < 24)
 	{
-		sprintf(value_str, "%u", config.low_th[cfg_idx]);
+		sprintf(value_str, "R:%u", config.low_th[cfg_idx]);
 	}
 	else if(strcmp(cfg_var, "TCP_IP") == 0)
 	{
-		strncpy(value_str, config.tcp_IPaddress, sizeof(value_str)-1);
+		sprintf(value_str, "R:%s", config.tcp_IPaddress);
 	}
 	else if(strcmp(cfg_var, "TCP_PORT") == 0)
 	{
-		strncpy(value_str, config.tcp_Port, sizeof(value_str)-1);
+		sprintf(value_str, "R:%s", config.tcp_Port);
 	}
 	else
 	{
-		strncpy(value_str, "UNKNOWN", sizeof(value_str)-1);
+		strncpy(value_str, "R:UNKNOWN", sizeof(value_str)-1);
 	}
 
 	memset(cfg_var, 0, sizeof(cfg_var));

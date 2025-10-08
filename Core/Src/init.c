@@ -196,14 +196,15 @@ void Config_Init(void)
     config.device_id = 0;
 	config.samp_freq = 800;
 	config.buffering_secs = 30;
-	config.connection_timeout = 60000;
+	config.connection_timeout_ms = 60000;
+	config.log_period_ms = 10000;
 	config.hammer_th = 4096;
     for(int i = 0; i < 24; i++) 
 	{
         config.low_th[i] = 0;
         config.high_th[i] = 4096;
     }
-    strcpy(config.tcp_IPaddress, "0.0.0.0");
+    strcpy(config.tcp_IPaddress, "esdplab.unipa.it");
     strcpy(config.tcp_Port, "8080");
 
     if (f_open(&config_file, CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)

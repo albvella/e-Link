@@ -290,7 +290,7 @@ int main(void)
 				}
 				LED_Stop(RED_LED);
 			}
-			else if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout)                  // Controllo connessione al server TCP ogni 60 secondi
+			else if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout_ms)                  // Controllo connessione al server TCP ogni config.connection_timeout_ms millisecondi
 			{
 				LED_Start(ORG_LED, MEDIUM, HALF);
 				SIM_Check_Connection();
@@ -321,54 +321,63 @@ int main(void)
 					flags.SIM_isConnected = 1;
 					flags.Message_Rx = 0;
 				}
-				if(flags.CMD.Data_Request)
+				if(flags.CMD.Idle)
 				{
-					LED_Start(ORG_LED, FAST, HIGH);
-					sprintf(Data_Logging, "%u,%u,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Vbatt, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
-					SIM_Send_TCP_Chunk_DMA(strlen(Data_Logging));
-					sys.SIM_Prompt_Status = HAL_GetTick();
-					flags.CMD.Data_Request = 0;
-				}
-				else if(flags.CMD.Idle)
-				{
-					LED_Stop(ORG_LED);
-					LED_Stop(RED_LED);
-					LED_Start(GRN_LED, MEDIUM, HALF);
-					state = IDLE;
-					Stop_Measure();
-					flags.CMD.Idle = 0;
-				}
-				else if(flags.CMD.Measure_Request)
-				{
-					if(!flags.TCP_isSending)
+					if(!flags.Log_TransferInProgress && !flags.Meas_TransferInProgress)
 					{
-						Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
-						if(flags.TCP_ReadytoSend)
-						{
-							SIM_Send_Command_DMA((char*)tcp_chunk);
-							flags.TCP_isSending = 1;
-							flags.TCP_ReadytoSend = 0;
-							if (Send_Measure_Addr == 0)
-							{
-								memset(tcp_chunk, 0, 1460);
-								LED_Stop(RED_LED);
-								flags.CMD.Measure_Request = 0;
-							}
-						}
+						Stop_Measure();
+						LED_Stop(ORG_LED);
+						LED_Stop(RED_LED);
+						LED_Start(GRN_LED, MEDIUM, HALF);
+						state = IDLE;
+						flags.CMD.Idle = 0;
 					}
 				}
-				if(flags.MQTT_ReadytoSend)
+				if(flags.CMD.Data_Request)
 				{
-					SIM_Send_Command_DMA(Data_Logging);
-					LED_Stop(ORG_LED);
-					flags.MQTT_ReadytoSend = 0;
+					if(HAL_GetTick() - sys.Log_Status > config.log_period_ms && !flags.Log_TransferInProgress && !flags.Meas_TransferInProgress)
+					{
+						LED_Start(ORG_LED, FAST, HIGH);
+						sprintf(Data_Logging, "L:%u,%u,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Vbatt, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
+						SIM_Send_TCP_Chunk_DMA(strlen(Data_Logging));
+						sys.SIM_Prompt_Status = HAL_GetTick();
+						sys.Log_Status = HAL_GetTick();
+						flags.Log_TransferInProgress = 1;
+					}
+					if(flags.Log_ReadytoSend)
+					{
+						SIM_Send_Command_DMA(Data_Logging);
+						LED_Stop(ORG_LED);
+						flags.SIM_isConnected = 1;
+						flags.Log_ReadytoSend = 0;
+						flags.Log_TransferInProgress = 0;
+					}
+				}
+				if(flags.CMD.Measure_Request)
+				{
+					if(!flags.Meas_TransferInProgress && !flags.Log_TransferInProgress && !flags.Measure_ReadytoSend)
+					{
+						Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
+						flags.Meas_TransferInProgress = 1;
+					}
+					if(flags.Measure_ReadytoSend)
+					{
+						SIM_Send_Command_DMA((char*)tcp_chunk);
+						flags.Measure_ReadytoSend = 0;
+						if (Send_Measure_Addr == (uint32_t)-1)
+						{
+							  memset(tcp_chunk, 0, 1460);
+							  LED_Stop(RED_LED);
+							  flags.CMD.Measure_Request = 0;
+						}
+					}
 				}
 				if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
 				{
 					flags.CMD.Data_Request = 1;
 					sys.SIM_Prompt_Status = 0;
 				}
-				if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout)
+				if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout_ms)
 				{
 					sys.SIM_Connection_Status = HAL_GetTick();
 					if(flags.SIM_isConnected)
@@ -377,7 +386,9 @@ int main(void)
 					}
 					else
 					{
-						state = IDLE;
+						flags.Log_TransferInProgress = 0;
+						flags.Meas_TransferInProgress = 0;
+						flags.CMD.Idle = 1;
 					}
 				}
 			}
@@ -389,22 +400,22 @@ int main(void)
 				HAL_UART_DMAStop(SIM_UART);
 				memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
 
-				SIM_Send_TCP("OTA_READY");
+				SIM_Send_TCP("R:OTA_READY");
 				if(OTA_Receive() == HAL_OK)
 				{
-					SIM_Send_TCP("OTA_RECEIVED");
+					SIM_Send_TCP("R:OTA_RECEIVED");
 					if(OTA_CRC_Check() == HAL_OK)
 					{
-						SIM_Send_TCP("OTA_CRC_OK");
+						SIM_Send_TCP("R:OTA_CRC_OK");
 						if(OTA_Apply() == HAL_OK)
 						{
-							SIM_Send_TCP("OTA_SUCCESS");
+							SIM_Send_TCP("R:OTA_SUCCESS");
 							HAL_Delay(500);
 							NVIC_SystemReset();
 						}
 						else
 						{
-							SIM_Send_TCP("OTA_APPLY_ERROR");
+							SIM_Send_TCP("R:OTA_APPLY_ERROR");
 							HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 							LED_Stop(ORG_LED);
 							LED_Stop(RED_LED);
@@ -414,7 +425,7 @@ int main(void)
 					}
 					else
 					{
-						SIM_Send_TCP("OTA_CRC_ERROR");
+						SIM_Send_TCP("R:OTA_CRC_ERROR");
 						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 						LED_Stop(ORG_LED);
 						LED_Stop(RED_LED);
@@ -426,7 +437,7 @@ int main(void)
 				}
 				else
 				{
-					SIM_Send_TCP("OTA_RECEIVE_ERROR");
+					SIM_Send_TCP("R:OTA_RECEIVE_ERROR");
 					HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 					LED_Stop(ORG_LED);
 					LED_Stop(RED_LED);
@@ -436,7 +447,7 @@ int main(void)
 			}
 			else
 			{
-				SIM_Send_TCP("OTA_INIT_ERROR");
+				SIM_Send_TCP("R:OTA_INIT_ERROR");
 				HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 				LED_Stop(ORG_LED);
 				LED_Stop(RED_LED);

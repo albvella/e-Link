@@ -75,10 +75,12 @@ typedef struct {
 	uint8_t BC_Interrupt : 1;
 	uint8_t ACC_Complete : 1;
 	uint8_t Message_Rx : 1;
-    uint8_t MQTT_ReadytoSend : 1;
-    uint8_t TCP_ReadytoSend : 1;
-    uint8_t TCP_isSending : 1;
+    uint8_t Log_ReadytoSend : 1;
+    uint8_t Measure_ReadytoSend : 1;
+    uint8_t Meas_TransferInProgress : 1;
+    uint8_t Log_TransferInProgress : 1;
     uint8_t SIM_isConnected : 1;
+    uint8_t Send_Data : 1;
     CMD_Typedef CMD;
 } System_Flags_TypeDef;
 
@@ -119,6 +121,7 @@ typedef struct {
     uint32_t Inactive_RAM_Len;
     uint32_t SIM_Prompt_Status;
     uint32_t SIM_Connection_Status;
+    uint32_t Log_Status;
     TCP_Typedef TCP;
 } System_Resources_Typedef;
 
@@ -126,7 +129,8 @@ typedef struct {
     uint8_t device_id;
     uint16_t samp_freq;
     uint8_t buffering_secs;
-    uint32_t connection_timeout;
+    uint32_t connection_timeout_ms;
+    uint32_t log_period_ms;
     uint16_t hammer_th;                    
     uint16_t low_th[24];                   
     uint16_t high_th[24];                  
