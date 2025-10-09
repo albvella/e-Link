@@ -3,11 +3,22 @@ import threading
 from fastcrc import crc32 as crc
 import base64
 from datetime import datetime
-import threading
 import queue
 
 class eLinkTCPServer:
+    """
+    Server TCP per la gestione di dispositivi e-Link.
+    Gestisce connessioni multiple, invio comandi, ricezione misure, OTA e code di messaggi.
+    """
     def __init__(self, host='esdplab.unipa.it', port=9000, handler=None):
+        """
+        Inizializza il server TCP.
+
+        Args:
+            host (str): Indirizzo host su cui ascoltare.
+            port (int): Porta su cui ascoltare.
+            handler (callable, optional): Funzione di callback per processare i dati ricevuti.
+        """
         self.host = host
         self.port = port
         self.handler = handler  # function to process received data
@@ -24,11 +35,17 @@ class eLinkTCPServer:
         self.allowed_commands = ["IDL", "SRT", "PNG", "SND", "MSR", "OTA", "SET", "GET", "RST"]
 
     def start(self):
+        """
+        Avvia il server TCP e inizia ad accettare connessioni.
+        """
         self.running = True
         print(f"TCP Server listening on {self.host}:{self.port}")
         threading.Thread(target=self._accept_loop, daemon=True).start()
 
     def stop(self):
+        """
+        Ferma il server TCP, chiude tutte le connessioni e pulisce le code.
+        """
         self.running = False
         for addr, queue in self.client_log_queues.items():
             queue.queue.clear()
@@ -46,7 +63,20 @@ class eLinkTCPServer:
         print("TCP Server stopped")
 
 
-    def send_command(self, client_sock, command, cfg_var=None, cfg_idx=None, cfg_val=None, buffer_size=20):
+    def send_command(self, client_sock, command, cfg_var=None, cfg_idx=None, cfg_val=None):
+        """
+        Invia un comando al client tramite socket TCP.
+
+        Args:
+            client_sock (socket.socket): Socket del client.
+            command (str): Comando da inviare (deve essere tra quelli consentiti).
+            cfg_var (str, optional): Variabile di configurazione.
+            cfg_idx (int, optional): Indice di configurazione.
+            cfg_val (str/int, optional): Valore di configurazione.
+
+        Returns:
+            None
+        """
         def worker():
             if command not in self.allowed_commands:
                 print(f"Command not allowed: {command}")
@@ -58,11 +88,26 @@ class eLinkTCPServer:
                 payload = f"+CMD,{command},0,{cfg_val}"
             else:
                 payload = f"+CMD,{command}"
-            client_sock.sendall(payload.encode())
+
+            try:
+                client_sock.sendall(payload.encode())
+            except Exception as e:
+                print(f"Error sending command: {e}")
         t = threading.Thread(target=worker, daemon=True)
         t.start()
 
-    def receive_measure(self, client_sock, filename=None, chunk_size=2048):
+
+    def receive_measure(self, client_sock, filename=None):
+        """
+        Riceve dati di misura dal client e li salva su file.
+
+        Args:
+            client_sock (socket.socket): Socket del client.
+            filename (str, optional): Nome del file di destinazione.
+
+        Returns:
+            threading.Thread: Thread worker che gestisce la ricezione.
+        """
         if filename is None:
             filename = datetime.now().strftime("%y%m%d_%H%M_comp.bin")
 
@@ -86,13 +131,25 @@ class eLinkTCPServer:
                     except Exception as e:
                         print(f"Socket error: {e}")
                         break
-            print(f"[Thread] Saved received data to {filename}")
+            print(f"Saved received measure to {filename}")
 
         t = threading.Thread(target=worker, daemon=True)
         t.start()
         return t
 
+
     def send_OTA(self, client_sock, filename, chunk_size=1024):
+        """
+        Invia un file al client per aggiornamento OTA, con conferma ACK per ogni chunk.
+
+        Args:
+            client_sock (socket.socket): Socket del client.
+            filename (str): Nome del file da inviare.
+            chunk_size (int, optional): Dimensione dei chunk inviati.
+
+        Returns:
+            bytes or None: Risposta finale del client, None in caso di errore.
+        """
         try:
             with open(filename, "rb") as f:
                 while True:
@@ -117,7 +174,18 @@ class eLinkTCPServer:
             print(f"Error sending file: {e}")
             return None
 
+
     def send_crc32(self, client_sock, filename):
+        """
+        Calcola e invia il CRC32 del file al client per verifica integrità.
+
+        Args:
+            client_sock (socket.socket): Socket del client.
+            filename (str): Nome del file da verificare.
+
+        Returns:
+            bytes or None: Risposta del client, None in caso di errore.
+        """
         crc_var = 0xFFFFFFFF
         try:
             with open(filename, "rb") as f:
@@ -136,7 +204,18 @@ class eLinkTCPServer:
             print(f"Error sending CRC32: {e}")
             return None
 
+
     def OTA_routine(self, client_sock, filename):
+        """
+        Esegue la routine completa di aggiornamento OTA: invio comando, file, CRC e verifica.
+
+        Args:
+            client_sock (socket.socket): Socket del client.
+            filename (str): Nome del file da inviare.
+
+        Returns:
+            None
+        """
         self.send_command(client_sock, "OTA", buffer_size=16)
         ret = self.client_reply_queues[client_sock.getpeername()].get(timeout=5)
         if ret is None or ret.decode() != "OTA_READY":
@@ -158,14 +237,29 @@ class eLinkTCPServer:
             print("OTA failed.")
         return
 
+
     def OTA(self, client_sock, filename):
+        """
+        Avvia la routine OTA in un thread separato.
+
+        Args:
+            client_sock (socket.socket): Socket del client.
+            filename (str): Nome del file da inviare.
+
+        Returns:
+            threading.Thread: Thread worker OTA.
+        """
         def worker():
             self.OTA_routine(client_sock, filename)
         t = threading.Thread(target=worker, daemon=True)
         t.start()
         return t
 
+
     def _accept_loop(self):
+        """
+        Loop principale per accettare nuove connessioni client.
+        """
         while self.running:
             try:
                 client_sock, addr = self.server_socket.accept()
@@ -181,7 +275,18 @@ class eLinkTCPServer:
             except Exception as e:
                 print(f"Accept error: {e}")
 
+
     def _client_thread(self, client_sock, addr):
+        """
+        Gestisce la comunicazione con un singolo client: ricezione dati e smistamento nelle code.
+
+        Args:
+            client_sock (socket.socket): Socket del client.
+            addr (tuple): Indirizzo del client.
+
+        Returns:
+            None
+        """
         with client_sock:
             while True:
                 try:
@@ -198,19 +303,20 @@ class eLinkTCPServer:
                         break
 
                     if data.startswith(b'L:'):
-                        print(f"Log from {addr}: {data}")
+                        data = data[2:]
                         self.client_log_queues[addr].put(data)
                     elif data.startswith(b'R:'):
-                        print(f"Reply from {addr}: {data}")
+                        data = data[2:]
                         self.client_reply_queues[addr].put(data)
                     elif len(data) > 400:
-                        print(f"Measure from {addr}: {data}")
                         self.client_meas_queues[addr].put(data)
                     else:
                         print(f"Unknown data from {addr}: {data}")
                         break
+
                     if self.handler:
                         self.handler(data)
+                        
                 except Exception as e:
                     print(f"Client error {addr}: {e}")
                     break
@@ -218,18 +324,82 @@ class eLinkTCPServer:
 
 
 def rx_handler(data):
+    clock_freq = 80000000
+    press_FS = 50
+    
+    msg = {}
     if(data.startswith(b'L:')):
-        print(f"Log: {data}")
+        try:
+            data = data[2:]
+            parts = data.split(",")
+            msg = {
+                "ID" : int(parts[0]),
+                "Press": int(parts[1]) * press_FS / 4096,
+                "FLow": clock_freq / int(parts[2]),
+                "ax": int(parts[3]) * 0.061,
+                "ay": int(parts[4]) * 0.061,
+                "az": int(parts[5]) * 0.061,
+                "Vbatt": int(parts[6]) * 0.001,
+                "I1": (((int(parts[7]) >>3) if int(parts[7]) < 0x8000 else (int(parts[7]) - 0x10000) >>3) * 0.00004 / 0.08),
+                "I2": (((int(parts[8]) >>3) if int(parts[8]) < 0x8000 else (int(parts[8]) - 0x10000) >>3) * 0.00004 / 0.08),
+                "I3": (((int(parts[9]) >>3) if int(parts[9]) < 0x8000 else (int(parts[9]) - 0x10000) >>3) * 0.00004 / 0.08),
+                "V1": int(parts[10]) * 0.008,
+                "V2": int(parts[11]) * 0.008,
+                "V3": int(parts[12]) * 0.008,
+                "Temp": int(parts[13]) * 0.0625 if int(parts[13]) < 0x8000 else (int(parts[13]) - 0x10000) * 0.0625
+            }
+        except Exception as e:
+            print(f"Data parse error: {e}")
+
     elif(data.startswith(b'R:')):
-        print(f"Reply: {data}")
+        if len(data) > 10:
+            try:
+                data = data[2:]
+                parts = data.split(",")
+                msg = {
+                    "ID": int(parts[0]),
+                    "Firmware Version": float(f"{int(parts[1]) >> 8}.{int(parts[1]) & 0xFF}"),
+                    "Uptime": datetime(year=int(parts[2]), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
+                    "Vbatt": int(parts[8]) * 0.001,
+                    "Sampling Freq": int(parts[9]),
+                    "Buffering Secs": int(parts[10]),
+                    "V1": int(parts[11]) * 0.008,
+                    "V2": int(parts[12]) * 0.008,
+                    "V3": int(parts[13]) * 0.008,
+                    "I1": (((int(parts[14]) >> 3) if int(parts[14]) < 0x8000 else (int(parts[14]) - 0x10000) >> 3) * 0.00004 / 0.08),
+                    "I2": (((int(parts[15]) >> 3) if int(parts[15]) < 0x8000 else (int(parts[15]) - 0x10000) >> 3) * 0.00004 / 0.08),
+                    "I3": (((int(parts[16]) >> 3) if int(parts[16]) < 0x8000 else (int(parts[16]) - 0x10000) >> 3) * 0.00004 / 0.08),
+                    "Temp": (int(parts[17]) * 0.0625 if int(parts[17]) < 0x8000 else (int(parts[17]) - 0x10000) * 0.0625)
+                }
+            except Exception as e:
+                print(f"Info parse error: {e}")
+        else:
+            data = data[2:]
+            msg = data
     else:
         print(f"Received Measure: {data}")
+
+    rx_cbk_queue.put(msg) 
+    return msg
+
+
+rx_cbk_queue = queue.Queue()
 
 if __name__ == "__main__":
     server = eLinkTCPServer(port=9000, handler=rx_handler)
     server.start()
     try:
         while True:
-            pass
+            try:
+                ret = rx_cbk_queue.get(timeout=1)
+                if ret is not None:
+                    if len(ret) > 10:
+                        for k in ret.keys():
+                            print("%-10s: %s" % (str(k), str(ret[k])))
+                    else:
+                        print("Response:", ret)
+            except queue.Empty:
+                pass
+
     except KeyboardInterrupt:
         server.stop()
