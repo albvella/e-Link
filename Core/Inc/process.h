@@ -22,7 +22,7 @@ uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t 
 void Apply_Config(void);
 void Get_Config(void);
 Compressed_Sizes_Typedef Compress_Sample(uint8_t* input, uint16_t input_len, uint8_t* output);
-uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, uint16_t* step_size_table);
+uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, const uint16_t* step_size_table);
 void Clear_Flags(void);
 
 #endif /* INC_PROCESS_H_ */

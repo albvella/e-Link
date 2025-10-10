@@ -92,11 +92,9 @@ void Save_Data(void)
 	}
 	BC_MultiRead_Reg(REG3B_VBAT_ADC, &Vbatt);
 
-	uint8_t compressed_data[MAX_COMPRESSED_SIZE];
+	__disable_irq();
 	Compressed_Sample_Typedef sample;
     sample.compressed_size = Compress_Sample(Saving_Buffer, SAVING_BUFFER_LEN, compressed_data);
-
-	__disable_irq();
 	RAM_Save_Measure(&sample, compressed_data);
 	__enable_irq();
 
@@ -109,19 +107,23 @@ void Save_Data(void)
 		{
 			if(!flags.CMD.Measure_Request)
 			{
-				LED_Start(RED_LED, FAST, LOW);
-				Switch_Buffer();
-				flags.CMD.Measure_Request = 1;
-				Send_Measure_Addr = Saved_Bytes;
-				Cycles_After_Warning = 0;
-				if(flags.Hammer_Detected)
+				if (!flags.Meas_TransferInProgress)
 				{
-					flags.Hammer_Detected = 0;
+					LED_Start(RED_LED, FAST, LOW);
+					Switch_Buffer();
+					flags.CMD.Measure_Request = 1;
+					Send_Measure_Addr = 0;
+					Cycles_After_Warning = 0;
+					if(flags.Hammer_Detected)
+					{
+						flags.Hammer_Detected = 0;
+					}
+					if(flags.Threshold_Detected)
+					{
+						flags.Threshold_Detected = 0;
+					}
 				}
-				if(flags.Threshold_Detected)
-				{
-					flags.Threshold_Detected = 0;
-				}
+				
 			}
 		}
 	}
@@ -131,7 +133,9 @@ void Save_Data(void)
 /*-----CAMBIO BUFFER-----*/
 void Switch_Buffer(void)
 {
-    sys.Inactive_RAM_Len = sys.Current_RAM_Len;
+	__disable_irq();
+    uint32_t temp_len = sys.Current_RAM_Len;
+    sys.Inactive_RAM_Len = temp_len;
 
     if (sys.Active_RAM_Buffer == 0) 
 	{
@@ -147,6 +151,7 @@ void Switch_Buffer(void)
     }
 
     sys.Current_RAM_Len = 0;
+	__enable_irq();
 }
 
 /*-----CANCELLAZIONE DATI RAM-----*/
@@ -200,10 +205,12 @@ void Start_Measure(void)
 /*-----FINE MISURA-----*/
 void Stop_Measure(void)
 {
+	__disable_irq();
 	HAL_ADC_Stop_DMA(PRESSURE_ADC);
 	HAL_TIM_OC_Stop_IT(ADC_TIMER, TIM_CHANNEL_3);
 	HAL_TIM_PWM_Stop(ACC_TIMER, TIM_CHANNEL_3);
 	HAL_TIM_IC_Stop_IT(VOLUME_TIMER, TIM_CHANNEL_1);
+	__enable_irq();
 }
 
 /*-----DETECTION COLPO D'ARIETE-----*/
@@ -243,93 +250,170 @@ void RAM_Save_Measure(Compressed_Sample_Typedef* sample, uint8_t* compressed_dat
                             sample->compressed_size.volume_size +
                             sample->compressed_size.acceleration_size;
     uint32_t total_size = METADATA_SIZE + samples_size;
-    uint32_t address = sys.Current_RAM_Base + sys.Current_RAM_Len;
 
-	if(Saved_Samples >= sys.RAM_Samples_Number) 
+    // Controllo corruzione
+    if (sys.Current_RAM_Len >= (RAM_SECOND_BUFFER_ADD - RAM_FIRST_BUFFER_ADD)) 
 	{
-		sys.Current_RAM_Len = Saved_Bytes;
-		Saved_Bytes = 0;
-		Saved_Samples = 0;
-		address = sys.Current_RAM_Base;
+        sys.Current_RAM_Len = 0;
+        Saved_Bytes = 0;
+        Saved_Samples = 0;
     }
 
-	RAM_Write(address, METADATA_SIZE, (uint8_t*)sample);
-    address += METADATA_SIZE;
+    // ========= LOGICA CIRCOLARE (PRIORITARIA) =========
+    if(Saved_Samples >= sys.RAM_Samples_Number) 
+	{
+        // RESET CIRCOLARE - riparti dall'inizio dello stesso buffer
+        sys.Current_RAM_Len = 0;        // ← CORRETTO: riparte da zero
+        Saved_Bytes = 0;
+        Saved_Samples = 0;
+    }
 
-	RAM_Write(address, samples_size, compressed_data);
+    uint32_t address = sys.Current_RAM_Base + sys.Current_RAM_Len;
+
+    // Controllo overflow SOLO se non siamo in modalità circolare
+    if (sys.Current_RAM_Len + total_size > (RAM_SECOND_BUFFER_ADD - RAM_FIRST_BUFFER_ADD)) 
+	{
+        // Overflow - forza switch buffer
+        Switch_Buffer();
+        Send_Measure_Addr = 0;
+        return;
+    }
+
+    // Salvataggio normale
+    RAM_Write(address, METADATA_SIZE, (uint8_t*)sample);
+    address += METADATA_SIZE;
+    RAM_Write(address, samples_size, compressed_data);
     
     Saved_Bytes += total_size;
-	Saved_Samples++;
+    sys.Current_RAM_Len += total_size;
+    Saved_Samples++;
 }
 
 /*-----INVIO CHUNK MISURA-----*/
 uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t start_address)
 {
     uint32_t raw_fill = 0;
-    uint8_t raw_buffer[1024]; // buffer temporaneo per i dati raw
+    uint8_t raw_buffer[1050]; // Dimensione ottimale per 1400 bytes TCP
     uint32_t address = start_address;
     uint32_t end_address = start_address;
     uint8_t first_loop = 1;
 
     if (buffer_len == 0) 
-    {
+	{
         return 0;
     }
 
-    do {
+    do 
+	{
+        // Wraparound check
         if (address >= buffer_base + buffer_len) 
-        {
+		{
             address = buffer_base;
         }
 
+        // Spazio insufficiente per metadata
         if ((buffer_base + buffer_len - address) < METADATA_SIZE && address < buffer_base + buffer_len) 
-        {
+		{
             break;
         }
+        
+        // Buffer chunk pieno per metadata
         if ((raw_fill + METADATA_SIZE) > sizeof(raw_buffer)) 
-        {
+		{
             break;
         }
 
+        // ========= SINGOLA LETTURA METADATA =========
         Compressed_Sample_Typedef sample_header;
         RAM_Read(address, METADATA_SIZE, (uint8_t*)&sample_header);
 
         uint32_t sample_size = sample_header.compressed_size.pressure_size +
                                sample_header.compressed_size.volume_size +
                                sample_header.compressed_size.acceleration_size;
+
+        // ========= VALIDAZIONE E CORREZIONE SAMPLE =========
+        if (sample_size == 0 || 
+            sample_size > MAX_COMPRESSED_SIZE ||
+            sample_header.compressed_size.pressure_size > 500 ||    // Limite ragionevole pressione
+            sample_header.compressed_size.volume_size > 100 ||      // Limite ragionevole volume  
+            sample_header.compressed_size.acceleration_size > 1000) // Limite ragionevole acc
+        { 
+            // Sample corrotto - crea metadata di emergenza
+            sample_header.compressed_size.pressure_size = sizeof(uint16_t);
+            sample_header.compressed_size.volume_size = sizeof(uint16_t);
+            sample_header.compressed_size.acceleration_size = sizeof(uint16_t);
+            sample_size = sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t);
+        }
+
         uint32_t sample_total_size = METADATA_SIZE + sample_size;
 
+        // Buffer chunk non può contenere questo sample
         if ((raw_fill + sample_total_size) > sizeof(raw_buffer)) 
-        {
+		{
             break;
         }
 
-        RAM_Read(address, METADATA_SIZE, raw_buffer + raw_fill);
+        // ========= COPIA METADATA (CORRETTI) NEL BUFFER =========
+        memcpy(raw_buffer + raw_fill, (uint8_t*)&sample_header, METADATA_SIZE);
         raw_fill += METADATA_SIZE;
         address += METADATA_SIZE;
         if (address >= buffer_base + buffer_len) address = buffer_base;
 
-        RAM_Read(address, sample_size, raw_buffer + raw_fill);
-        raw_fill += sample_size;
-        address += sample_size;
-        if (address >= buffer_base + buffer_len) address = buffer_base;
+        // ========= GESTIONE DATI SAMPLE =========
+        if (sample_header.compressed_size.pressure_size == sizeof(uint16_t) && 
+            sample_header.compressed_size.volume_size == sizeof(uint16_t) &&
+            sample_header.compressed_size.acceleration_size == sizeof(uint16_t)) 
+			{
 
+            // Sample era corrotto - riempi con zeri
+            memset(raw_buffer + raw_fill, 0, sample_size);
+            raw_fill += sample_size;
+            
+            // Salta i dati corrotti in RAM (avanza di sample_size originale)
+            // Nota: questo potrebbe non essere allineato, ma è meglio che rimanere bloccati
+            address += sample_size;
+            if (address >= buffer_base + buffer_len) 
+			{
+                address = buffer_base + ((address - buffer_base) % buffer_len);
+            }
+        } else {
+            // Sample valido - leggi dati reali dalla RAM
+            // Gestione wraparound sicura
+            if (address + sample_size <= buffer_base + buffer_len) 
+			{
+                // Dati non vanno oltre il buffer
+                RAM_Read(address, sample_size, raw_buffer + raw_fill);
+            } 
+			else 
+			{
+                // Dati si split tra fine e inizio buffer
+                uint32_t first_part = (buffer_base + buffer_len) - address;
+                uint32_t second_part = sample_size - first_part;
+                RAM_Read(address, first_part, raw_buffer + raw_fill);
+                RAM_Read(buffer_base, second_part, raw_buffer + raw_fill + first_part);
+            }
+            raw_fill += sample_size;
+            address += sample_size;
+            if (address >= buffer_base + buffer_len) address = buffer_base;
+        }
+
+        // Condizione di fine
         if (address == end_address && !first_loop) 
-        {
+		{
             break;
         }
         first_loop = 0;
     } while (1);
 
     if (raw_fill > 0) 
-    {
+	{
         // Codifica in base64
         size_t b64_len = Base64_Encode(raw_buffer, raw_fill, (char*)tcp_chunk, sizeof(tcp_chunk));
         SIM_Send_TCP_Chunk_DMA(b64_len);
     }
 
     if (address == end_address) 
-    {
+	{
         return (uint32_t)-1;
     }
     return address;
@@ -431,7 +515,7 @@ Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uin
 }
 
 /*-----FUNZIONE DI COMPRESSIONE ADPCM-----*/
-uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, uint16_t* step_size_table) 
+uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, const uint16_t* step_size_table) 
 {
     int32_t diff = (int32_t)sample - state->previous_value;
     uint16_t step = step_size_table[state->step_index];
@@ -443,6 +527,7 @@ uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, uint16_t* s
         diff = -diff;
     }
 
+	if (step == 0) step = 1;
     // Calcola il nibble quantizzato
     uint32_t temp = (uint32_t)diff * 4;
     if (temp < step) 
@@ -462,9 +547,19 @@ uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, uint16_t* s
     
     state->previous_value += reconstructed_diff;
 
-    // Clamp del valore predetto
-    if (state->previous_value > 32767) state->previous_value = 32767;
-    if (state->previous_value < -32768) state->previous_value = -32768;
+    // CLAMP DINAMICO BASATO SULLA LUT
+    if (step_size_table == step_size_table_12bit) 
+    {
+        // Dati 12-bit ADC: unsigned 0-4095
+        if (state->previous_value > 4095) state->previous_value = 4095;
+        if (state->previous_value < 0) state->previous_value = 0;
+    } 
+    else if (step_size_table == step_size_table_16bit) 
+    {
+        // Dati 16-bit accelerometro: signed -32768 to +32767
+        if (state->previous_value > 32767) state->previous_value = 32767;
+        if (state->previous_value < -32768) state->previous_value = -32768;
+    }
 
     // Aggiorna l'indice dello step
     state->step_index += index_adjustment_table[nibble & 7];

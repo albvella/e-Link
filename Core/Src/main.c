@@ -134,7 +134,9 @@ char cfg_var[20] = {0};
 int cfg_idx = 0;
 char new_cfg_val[10] = {0};
 
-uint16_t step_size_table_16bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 16 bit
+uint8_t compressed_data[MAX_COMPRESSED_SIZE] = {0}; 
+
+const uint16_t step_size_table_16bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 16 bit
 		7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31,
 		34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143,
 		157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658,
@@ -142,7 +144,7 @@ uint16_t step_size_table_16bit[88] = {                                          
 		3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
 		15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794
 };
-uint16_t step_size_table_12bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 12 bit
+const uint16_t step_size_table_12bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 12 bit
 		1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4,
 		4, 5, 5, 6, 6, 7, 8, 8, 9, 10, 11, 12, 13, 15, 16, 18,
 		20, 22, 24, 26, 29, 32, 35, 38, 42, 46, 51, 56, 62, 68, 75, 83,
@@ -150,9 +152,9 @@ uint16_t step_size_table_12bit[88] = {                                          
 		404, 442, 483, 528, 577, 630, 688, 751, 819, 893, 974, 1062, 1157, 1261, 1373, 1499,
 		1629, 1682, 1850, 2035, 2238, 2462, 2709, 2979
 };
-int8_t index_adjustment_table[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
+const int8_t index_adjustment_table[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
 
-unsigned char base64_table[256] = {
+const unsigned char base64_table[256] = {
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80, // 0x00-0x0F
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80, // 0x10-0x1F
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,62,   0x80,0x80,0x80,63,   // 0x20-0x2F
@@ -358,6 +360,7 @@ int main(void)
 					if(!flags.Meas_TransferInProgress && !flags.Log_TransferInProgress && !flags.Measure_ReadytoSend)
 					{
 						Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
+            sys.SIM_Prompt_Status = HAL_GetTick();
 						flags.Meas_TransferInProgress = 1;
 					}
 					if(flags.Measure_ReadytoSend)
@@ -374,7 +377,6 @@ int main(void)
 				}
 				if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
 				{
-					flags.CMD.Data_Request = 1;
 					sys.SIM_Prompt_Status = 0;
 				}
 				if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout_ms)

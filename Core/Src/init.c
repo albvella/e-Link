@@ -146,7 +146,18 @@ int Acc_Init(stmdev_ctx_t* acc, uint16_t fs)
 	lsm6dsv16x_ui_i2c_i3c_mode_set(acc, LSM6DSV16X_I2C_I3C_DISABLE);
 	lsm6dsv16x_xl_mode_set(acc, LSM6DSV16X_XL_HIGH_PERFORMANCE_MD);
 	lsm6dsv16x_gy_mode_set(acc, LSM6DSV16X_GY_HIGH_PERFORMANCE_MD);
-	lsm6dsv16x_fifo_xl_batch_set(acc, LSM6DSV16X_XL_BATCHED_AT_960Hz);
+	if(fs == 1600)
+	{
+		lsm6dsv16x_fifo_xl_batch_set(acc, LSM6DSV16X_XL_BATCHED_AT_1920Hz);
+	}
+	else if(fs == 800)
+	{
+		lsm6dsv16x_fifo_xl_batch_set(acc, LSM6DSV16X_XL_BATCHED_AT_960Hz);
+	}
+	else
+	{
+		return -1;
+	}
 	lsm6dsv16x_fifo_gy_batch_set(acc, LSM6DSV16X_GY_NOT_BATCHED);
 	lsm6dsv16x_fifo_mode_set(acc, LSM6DSV16X_BYPASS_MODE);
 	lsm6dsv16x_xl_data_rate_set(acc, LSM6DSV16X_ODR_OFF);

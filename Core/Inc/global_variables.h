@@ -103,11 +103,13 @@ extern char cfg_var[20];
 extern int cfg_idx;
 extern char new_cfg_val[10];
 
-extern uint16_t step_size_table_16bit[88];
-extern uint16_t step_size_table_12bit[88];
-extern int8_t index_adjustment_table[8];
+extern uint8_t compressed_data[MAX_COMPRESSED_SIZE];
 
-extern unsigned char base64_table[256];
+extern const uint16_t step_size_table_16bit[88];
+extern const uint16_t step_size_table_12bit[88];
+extern const int8_t index_adjustment_table[8];
+
+extern const unsigned char base64_table[256];
 extern const char base64_enc_table[64];
 
 

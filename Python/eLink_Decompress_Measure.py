@@ -57,7 +57,15 @@ class eLink_Decompress_Measure:
         out = []
         idx = 0
         step_index = 0
-        prev = struct.unpack_from('<H', comp_bytes, 0)[0]
+        
+        # Valore iniziale - gestione corretta signed/unsigned
+        if bits == 12:
+            # 12-bit: unsigned (0-4095)
+            prev = struct.unpack_from('<H', comp_bytes, 0)[0]
+        else:
+            # 16-bit: signed (-32768 to +32767)
+            prev = struct.unpack_from('<h', comp_bytes, 0)[0]
+            
         out.append(prev)
         idx = 2
         while idx < len(comp_bytes):
@@ -70,7 +78,16 @@ class eLink_Decompress_Measure:
                 diff = (step * delta) // 4 + step // 8
                 if sign:
                     diff = -diff
-                prev = (prev + diff) & 0xFFFF
+                prev = prev + diff
+                
+                # CLAMP DINAMICO BASATO SUI BITS
+                if bits == 12:
+                    # Dati 12-bit ADC: unsigned 0-4095
+                    prev = max(0, min(4095, prev))
+                else:
+                    # Dati 16-bit accelerometro: signed -32768 to +32767
+                    prev = max(-32768, min(32767, prev))
+                
                 out.append(prev)
                 step_index += index_adjustment_table[delta]
                 step_index = max(0, min(87, step_index))
@@ -87,9 +104,10 @@ class eLink_Decompress_Measure:
         if len(comp_bytes) < 7:
             return ax, ay, az
         raw = comp_bytes[:7]
-        x = raw[1] | (raw[2] << 8)
-        y = raw[3] | (raw[4] << 8)
-        z = raw[5] | (raw[6] << 8)
+        # Interpretazione come signed per accelerometro 16-bit
+        x = struct.unpack_from('<h', raw, 1)[0]
+        y = struct.unpack_from('<h', raw, 3)[0]
+        z = struct.unpack_from('<h', raw, 5)[0]
         ax.append(x)
         ay.append(y)
         az.append(z)
@@ -109,7 +127,9 @@ class eLink_Decompress_Measure:
             diff = (step * delta) // 4 + step // 8
             if sign:
                 diff = -diff
-            x_state['prev'] = (x_state['prev'] + diff) & 0xFFFF
+            x_state['prev'] = x_state['prev'] + diff
+            # CLAMP per 16-bit signed accelerometro
+            x_state['prev'] = max(-32768, min(32767, x_state['prev']))
             x_state['step_index'] += index_adjustment_table[delta]
             x_state['step_index'] = max(0, min(87, x_state['step_index']))
             ax.append(x_state['prev'])
@@ -121,7 +141,9 @@ class eLink_Decompress_Measure:
             diff = (step * delta) // 4 + step // 8
             if sign:
                 diff = -diff
-            y_state['prev'] = (y_state['prev'] + diff) & 0xFFFF
+            y_state['prev'] = y_state['prev'] + diff
+            # CLAMP per 16-bit signed accelerometro
+            y_state['prev'] = max(-32768, min(32767, y_state['prev']))
             y_state['step_index'] += index_adjustment_table[delta]
             y_state['step_index'] = max(0, min(87, y_state['step_index']))
             ay.append(y_state['prev'])
@@ -133,7 +155,9 @@ class eLink_Decompress_Measure:
             diff = (step * delta) // 4 + step // 8
             if sign:
                 diff = -diff
-            z_state['prev'] = (z_state['prev'] + diff) & 0xFFFF
+            z_state['prev'] = z_state['prev'] + diff
+            # CLAMP per 16-bit signed accelerometro
+            z_state['prev'] = max(-32768, min(32767, z_state['prev']))
             z_state['step_index'] += index_adjustment_table[delta]
             z_state['step_index'] = max(0, min(87, z_state['step_index']))
             az.append(z_state['prev'])

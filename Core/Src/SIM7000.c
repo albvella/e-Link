@@ -88,13 +88,34 @@ int SIM_Init(void)
 		}
 	}
 
-
 	SIM_Send_Command("AT+CSQ\r");																  //Controllo qualità connessione
 	SIM_Receive_Response(response, 5000);
 	if(strstr(response, "+CSQ: 99") != NULL)
 	{
-		SIM_Power_Off();
-		return -1;
+		SIM_Send_Command("AT+CFUN=0\r");     //Reset RF
+		SIM_Wait_Response("OK");
+		HAL_Delay(2000);                    
+		SIM_Send_Command("AT+CFUN=1\r");     
+		SIM_Wait_Response("OK");
+		HAL_Delay(3000);                     
+
+		SIM_Send_Command("AT+CSQ\r");
+		SIM_Receive_Response(response, 5000);
+		
+		if(strstr(response, "+CSQ: 99") != NULL)
+		{
+			SIM_Send_Command("AT+CFUN=1,1\r");   // Software reset
+			HAL_Delay(12000);          
+			memset(response, 0, sizeof(response));           
+			
+			SIM_Send_Command("AT+CSQ\r");
+			SIM_Receive_Response(response, 5000);
+			if(strstr(response, "+CSQ: 99") != NULL)
+			{
+				SIM_Power_Off();                 //Power cycle fisico
+				return -1;
+			}
+		}
 	}
 
 	SIM_Send_Command("AT+CEREG?\r");                                                              //Controllo registrazione alla rete
