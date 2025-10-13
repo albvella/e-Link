@@ -9,5 +9,5 @@
 ../Core/Src/process.c:423:26:Compress_Sample	8
 ../Core/Src/process.c:518:9:ADPCM_Compression	12
 ../Core/Src/process.c:574:6:Apply_Config	22
-../Core/Src/process.c:670:6:Get_Config	15
-../Core/Src/process.c:727:6:Clear_Flags	2
+../Core/Src/process.c:685:6:Get_Config	15
+../Core/Src/process.c:742:6:Clear_Flags	2

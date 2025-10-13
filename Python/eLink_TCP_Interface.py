@@ -4,6 +4,7 @@ from fastcrc import crc32 as crc
 import base64
 from datetime import datetime
 import queue
+import time
 
 class eLinkTCPServer:
     """
@@ -28,11 +29,13 @@ class eLinkTCPServer:
         self.server_socket.listen(5)
         self.running = False
         self.threads = []
-        self.clients = {}
+        self.clients = {}  # addr -> socket
+        self.device_clients = {}  # device_id -> addr
         self.client_log_queues = {}
         self.client_reply_queues = {} 
         self.client_meas_queues = {}
         self.allowed_commands = ["IDL", "SRT", "PNG", "SND", "MSR", "OTA", "SET", "GET", "RST"]
+        self.allowed_vars = ["DEVICE_ID", "SAMP_FREQ", "BUFFER_SECS", "CONN_TIMEOUT", "LOG_PERIOD", "HAMMER_TH", "HIGH_TH", "LOW_TH", "TCP_IP", "TCP_PORT"]
 
     def start(self):
         """
@@ -56,6 +59,7 @@ class eLinkTCPServer:
         for addr, sock in self.clients.items():
             sock.close()
         self.clients.clear()
+        self.device_clients.clear()
         self.client_log_queues.clear()
         self.client_reply_queues.clear()
         self.client_meas_queues.clear()
@@ -82,12 +86,18 @@ class eLinkTCPServer:
                 print(f"Command not allowed: {command}")
                 print(f"Allowed commands: {self.allowed_commands}")
                 return False
+            if cfg_var is not None and cfg_var not in self.allowed_vars:
+                print(f"Configuration variable not allowed: {cfg_var}")
+                print(f"Allowed variables: {self.allowed_vars}")
+                return False
             if cfg_var is not None and cfg_idx is not None and cfg_val is not None:
                 payload = f"+CMD,{command},{cfg_var},{cfg_idx},{cfg_val}"
-            elif cfg_var is not None and cfg_val is not None:
-                payload = f"+CMD,{command},0,{cfg_val}"
             else:
-                payload = f"+CMD,{command}"
+                if command != "SET" and command != "GET":
+                    payload = f"+CMD,{command}"
+                else:
+                    print(f"SET and GET commands require cfg_var and cfg_val (and cfg_idx for SET).")
+                    return False
 
             try:
                 client_sock.sendall(payload.encode())
@@ -255,6 +265,156 @@ class eLinkTCPServer:
         t.start()
         return t
 
+    def _extract_device_id_from_log(self, data, addr):
+        """
+        Estrae il device_id dai messaggi di log e lo associa all'indirizzo.
+        
+        Args:
+            data (bytes): Dati del messaggio di log.
+            addr (tuple): Indirizzo del client.
+        """
+        try:
+            parts = data.decode().split(b",") if isinstance(data, bytes) else data.split(",")
+            if len(parts) > 0:
+                device_id = int(parts[0])
+                if addr not in self.device_clients.values():
+                    self.device_clients[device_id] = addr
+                    print(f"Device ID {device_id} associated with {addr}")
+                    print(f"Device List: {list(self.device_clients.keys())}")
+        except Exception as e:
+            pass  # Non tutti i messaggi di log contengono device_id
+
+    def _extract_device_id_from_reply(self, data, addr):
+        """
+        Estrae il device_id dalle risposte e lo associa all'indirizzo.
+        
+        Args:
+            data (bytes): Dati della risposta.
+            addr (tuple): Indirizzo del client.
+        """
+        try:
+            if len(data) > 10:  # Risposta completa con info dispositivo
+                parts = data.decode().split(",") if isinstance(data, bytes) else data.split(",")
+                if len(parts) > 0:
+                    device_id = int(parts[0])
+                    if addr not in self.device_clients.values():
+                        self.device_clients[device_id] = addr
+                        print(f"Device ID {device_id} associated with {addr}")
+                        print(f"Device List: {list(self.device_clients.keys())}")
+        except Exception as e:
+            pass  # Non tutte le risposte contengono device_id
+
+    def _disconnect_client(self, addr):
+        """
+        Disconnette un client e pulisce tutte le strutture dati associate.
+        
+        Args:
+            addr (tuple): Indirizzo del client da disconnettere.
+        """
+        # Rimuovi device_id dal mapping
+        device_id_to_remove = None
+        for device_id, client_addr in self.device_clients.items():
+            if client_addr == addr:
+                device_id_to_remove = device_id
+                break
+        
+        if device_id_to_remove is not None:
+            del self.device_clients[device_id_to_remove]
+            print(f"Device ID {device_id_to_remove} disconnected")
+        
+        # Pulisci le code e i dizionari
+        if addr in self.client_reply_queues:
+            self.client_reply_queues[addr].queue.clear()
+            del self.client_reply_queues[addr]
+        if addr in self.client_log_queues:
+            self.client_log_queues[addr].queue.clear()
+            del self.client_log_queues[addr]
+        if addr in self.client_meas_queues:
+            self.client_meas_queues[addr].queue.clear()
+            del self.client_meas_queues[addr]
+        if addr in self.clients:
+            del self.clients[addr]
+
+    def get_client_by_device_id(self, device_id):
+        """
+        Ottiene il socket del client tramite device_id.
+        
+        Args:
+            device_id (int): ID del dispositivo.
+            
+        Returns:
+            socket.socket or None: Socket del client o None se non trovato.
+        """
+        addr = self.device_clients.get(device_id)
+        if addr:
+            return self.clients.get(addr)
+        return None
+
+    def send_command_to_device(self, device_id, command, cfg_var=None, cfg_idx=None, cfg_val=None):
+        """
+        Invia un comando a un dispositivo specifico tramite device_id.
+        
+        Args:
+            device_id (int): ID del dispositivo.
+            command (str): Comando da inviare.
+            cfg_var (str, optional): Variabile di configurazione.
+            cfg_idx (int, optional): Indice di configurazione.
+            cfg_val (str/int, optional): Valore di configurazione.
+            
+        Returns:
+            bool: True se il comando è stato inviato, False altrimenti.
+        """
+        if device_id == 0:                             # broadcast a tutti i dispositivi
+            for dev_id in self.device_clients.keys():
+                client_sock = self.get_client_by_device_id(dev_id)
+                if client_sock:
+                    self.send_command(client_sock, command, cfg_var, cfg_idx, cfg_val)
+            return True
+        
+        client_sock = self.get_client_by_device_id(device_id)
+        if client_sock:
+            self.send_command(client_sock, command, cfg_var, cfg_idx, cfg_val)
+            return True
+        else:
+            print(f"Device ID {device_id} not found")
+            return False
+
+    def get_connected_devices(self):
+        """
+        Restituisce la lista dei device_id connessi.
+        
+        Returns:
+            list: Lista degli ID dei dispositivi connessi.
+        """
+        return list(self.device_clients.keys())
+
+    def _request_device_id(self, client_sock, addr):
+        """
+        Richiede il device_id al client appena connesso e lo associa all'indirizzo.
+        
+        Args:
+            client_sock (socket.socket): Socket del client.
+            addr (tuple): Indirizzo del client.
+        """
+        try:
+            # Invia comando PNG per ottenere le info del dispositivo
+            payload = "+CMD,PNG"
+            client_sock.sendall(payload.encode())
+            
+            # Avvia un timer per gestire il timeout della risposta
+            def timeout_handler():
+                import time
+                time.sleep(10)  # 10 secondi di timeout
+                if addr not in self.device_clients.values():
+                    print(f"Device ID timeout for {addr}, disconnecting...")
+                    self._disconnect_client(addr)
+            
+            threading.Thread(target=timeout_handler, daemon=True).start()
+            
+        except Exception as e:
+            print(f"Error requesting device ID from {addr}: {e}")
+            self._disconnect_client(addr)
+
 
     def _accept_loop(self):
         """
@@ -268,7 +428,10 @@ class eLinkTCPServer:
                 self.client_log_queues[addr] = queue.Queue()
                 self.client_meas_queues[addr] = queue.Queue()
                 print(f"Connection from {addr}")
-                print(f"Client List: {list(self.clients.keys())}")
+                
+                time.sleep(0.5)
+                self._request_device_id(client_sock, addr)
+                
                 t = threading.Thread(target=self._client_thread, args=(client_sock, addr), daemon=True)
                 t.start()
                 self.threads.append(t)
@@ -293,26 +456,21 @@ class eLinkTCPServer:
                     data = client_sock.recv(4096)
                     if not data:
                         print(f"Connection closed by {addr}")
-                        self.client_reply_queues[addr].queue.clear()
-                        self.client_log_queues[addr].queue.clear()
-                        self.client_meas_queues[addr].queue.clear()
-                        del self.clients[addr]
-                        del self.client_reply_queues[addr]
-                        del self.client_log_queues[addr]
-                        del self.client_meas_queues[addr]
+                        self._disconnect_client(addr)
                         break
 
                     if data.startswith(b'L:'):
-                        data = data[2:]
-                        self.client_log_queues[addr].put(data)
+                        data_content = data[2:]
+                        self.client_log_queues[addr].put(data_content)
+                        self._extract_device_id_from_log(data_content, addr)
                     elif data.startswith(b'R:'):
-                        data = data[2:]
-                        self.client_reply_queues[addr].put(data)
+                        data_content = data[2:]
+                        self.client_reply_queues[addr].put(data_content)
+                        self._extract_device_id_from_reply(data_content, addr)
                     elif len(data) > 400:
                         self.client_meas_queues[addr].put(data)
                     else:
                         print(f"Unknown data from {addr}: {data}")
-                        break
 
                     if self.handler:
                         self.handler(data)
@@ -320,6 +478,8 @@ class eLinkTCPServer:
                 except Exception as e:
                     print(f"Client error {addr}: {e}")
                     break
+
+    
 
 
 
@@ -376,6 +536,7 @@ def rx_handler(data):
         else:
             data = data[2:]
             msg = data
+            print(f"Received Reply: {data}")
     else:
         print(f"Received Measure: {data}")
 

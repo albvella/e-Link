@@ -80,6 +80,7 @@ typedef struct {
     uint8_t Meas_TransferInProgress : 1;
     uint8_t Log_TransferInProgress : 1;
     uint8_t SIM_isConnected : 1;
+    uint8_t TCP_Parameter_Changed : 1;
     uint8_t Send_Data : 1;
     CMD_Typedef CMD;
 } System_Flags_TypeDef;

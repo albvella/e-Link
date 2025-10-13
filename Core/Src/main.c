@@ -290,6 +290,27 @@ int main(void)
 					SIM_Send_Infos();
 					flags.CMD.Ping = 0;
 				}
+				else if(flags.TCP_Parameter_Changed)
+				{
+				  char response[256];
+				  LED_Start(ORG_LED, MEDIUM, HALF);
+				  SIM_Send_Command("AT+CIPCLOSE\n");
+				  SIM_Receive_Response(response, 2000);
+				  if(strstr(response, "CLOSE OK") == NULL && strstr(response, "ERROR") == NULL)
+				  {
+					  memset(response, 0, sizeof(response));
+					  SIM_Send_Command("AT+CIPSHUT\n");
+					  SIM_Receive_Response(response, 70000);
+					  if(strstr(response, "SHUT OK") == NULL && strstr(response, "ERROR") == NULL)
+					  {
+						HAL_NVIC_SystemReset();
+					  }
+					  HAL_Delay(1000);
+				  }
+				  SIM_Check_Connection();
+				  LED_Stop(ORG_LED);
+				  flags.TCP_Parameter_Changed = 0;
+				}
 				LED_Stop(RED_LED);
 			}
 			else if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout_ms)                  // Controllo connessione al server TCP ogni config.connection_timeout_ms millisecondi

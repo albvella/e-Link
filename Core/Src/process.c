@@ -626,6 +626,11 @@ void Apply_Config(void)
 		{
             config.high_th[cfg_idx] = (uint16_t)atoi(new_cfg_val);
         }
+		else
+		{
+			SIM_Send_TCP("R:ERR");
+			return;
+		}
     }
     else if(strcmp(cfg_var, "LOW_TH") == 0) 
 	{
@@ -633,21 +638,29 @@ void Apply_Config(void)
 		{
             config.low_th[cfg_idx] = (uint16_t)atoi(new_cfg_val);
         }
+		else
+		{
+			SIM_Send_TCP("R:ERR");
+			return;
+		}
     }
     else if(strcmp(cfg_var, "TCP_IP") == 0)
 	{
         strncpy(config.tcp_IPaddress, new_cfg_val, sizeof(config.tcp_IPaddress) - 1);
         config.tcp_IPaddress[sizeof(config.tcp_IPaddress) - 1] = '\0';
 		strcpy(sys.TCP.IP_address, config.tcp_IPaddress);
+		flags.TCP_Parameter_Changed = 1;
     }
     else if(strcmp(cfg_var, "TCP_PORT") == 0)
 	{
         strncpy(config.tcp_Port, new_cfg_val, sizeof(config.tcp_Port) - 1);
         config.tcp_Port[sizeof(config.tcp_Port) - 1] = '\0';
 		strcpy(sys.TCP.Port, config.tcp_Port);
+		flags.TCP_Parameter_Changed = 1;
     }
 	else
 	{
+		SIM_Send_TCP("R:VAR_ERR");
 		return;
 	}
 
@@ -658,12 +671,14 @@ void Apply_Config(void)
 	}
 	else
 	{
+		SIM_Send_TCP("R:SAV_ERR");
 		return;
 	}
 	
 	memset(cfg_var, 0, sizeof(cfg_var));
 	cfg_idx = 0;
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));	
+	SIM_Send_TCP("R:OK");
 }
 
 /*-----RECUPERO E INVIO VALORE DI CONFIGURAZIONE-----*/
@@ -713,7 +728,7 @@ void Get_Config(void)
 	}
 	else
 	{
-		strncpy(value_str, "R:UNKNOWN", sizeof(value_str)-1);
+		strncpy(value_str, "R:ERR", sizeof(value_str)-1);
 	}
 
 	memset(cfg_var, 0, sizeof(cfg_var));

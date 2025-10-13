@@ -40,7 +40,6 @@ void System_Init(void)
 
 	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
 
-	HAL_Delay(9000);
 	LED_Start(GRN_LED, MEDIUM, HALF);
 }
 
