@@ -596,9 +596,14 @@ void SIM_Check_Connection(void)
 {
 	char command_sim[256];
 	char response_sim[256];
+	uint32_t start_time;
+    const uint32_t CEREG_TIMEOUT = 180000;  
+    const uint32_t TCP_TIMEOUT = 120000;     
+    const uint32_t MAX_TCP_ATTEMPTS = 5;    
 
 	int registered = 0;
-    while(!registered)
+	start_time = HAL_GetTick();
+    while(!registered && (HAL_GetTick() - start_time) < CEREG_TIMEOUT)
     {
         SIM_Send_Command("AT+CEREG?\r");
         SIM_Receive_Response(response_sim, 5000);
@@ -614,15 +619,28 @@ void SIM_Check_Connection(void)
         }
     }
 
+	if(!registered) 
+	{
+        HAL_NVIC_SystemReset(); 
+    }
+
 	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
 	SIM_Receive_Response(response_sim, 5000);
-	while(!SIM_Check_TCP_State(response_sim))
+	start_time = HAL_GetTick();
+    uint32_t tcp_attempts = 0;
+	while(!SIM_Check_TCP_State(response_sim) && (HAL_GetTick() - start_time) < TCP_TIMEOUT && tcp_attempts < MAX_TCP_ATTEMPTS)
 	{
 		sprintf(command_sim, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);       
 		SIM_Send_Command(command_sim);
 		SIM_Wait_Response("CONNECT OK");
 		SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
 		SIM_Receive_Response(response_sim, 5000);
+		tcp_attempts++;
 		HAL_Delay(2000);
 	}
+
+	if(!SIM_Check_TCP_State(response_sim)) 
+	{
+        HAL_NVIC_SystemReset();
+    }
 }
