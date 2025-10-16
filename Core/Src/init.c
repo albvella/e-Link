@@ -33,6 +33,13 @@ void System_Init(void)
 	Config_Init();
 	Acc_Init(&acc, config.samp_freq);
 	LED_Start(ORG_LED, FAST, HALF);
+	if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET)
+	{
+		SIM_Power_On();
+		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);            //Attesa accensione modulo
+
+	}
+	SIM_Reset();
 	while(SIM_Init() != HAL_OK);
 	LED_Stop(ORG_LED);
 	RTC_Init();

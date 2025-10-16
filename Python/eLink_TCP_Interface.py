@@ -450,6 +450,7 @@ class eLinkTCPServer:
         Returns:
             None
         """
+        client_sock.settimeout(180.0)      # Timeout di 3 minuti
         with client_sock:
             while True:
                 try:
@@ -474,7 +475,16 @@ class eLinkTCPServer:
 
                     if self.handler:
                         self.handler(data)
-                        
+
+                except socket.timeout:
+                    print(f"Timeout from {addr}, checking connection...")
+                    try:
+                        client_sock.send(b'')  # Ping test 
+                    except:
+                        print(f"Client {addr} disconnected (timeout)")
+                        self._disconnect_client(addr)
+                        break
+
                 except Exception as e:
                     print(f"Client error {addr}: {e}")
                     break

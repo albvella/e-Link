@@ -381,7 +381,7 @@ int main(void)
 					if(!flags.Meas_TransferInProgress && !flags.Log_TransferInProgress && !flags.Measure_ReadytoSend)
 					{
 						Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
-            sys.SIM_Prompt_Status = HAL_GetTick();
+						sys.SIM_Prompt_Status = HAL_GetTick();
 						flags.Meas_TransferInProgress = 1;
 					}
 					if(flags.Measure_ReadytoSend)
@@ -398,13 +398,13 @@ int main(void)
 				}
 				if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
 				{
-          char cmd = 0x1A;
-          SIM_Send_Command_DMA(&cmd);
-          flags.Log_TransferInProgress = 0;
-          flags.Meas_TransferInProgress = 0;
-          flags.Measure_ReadytoSend = 0;
-          flags.Log_ReadytoSend = 0;
-					sys.SIM_Prompt_Status = 0;
+					  char cmd = 0x1A;
+					  SIM_Send_Command_DMA(&cmd);
+					  flags.Log_TransferInProgress = 0;
+					  flags.Meas_TransferInProgress = 0;
+					  flags.Measure_ReadytoSend = 0;
+					  flags.Log_ReadytoSend = 0;
+					  sys.SIM_Prompt_Status = 0;
 				}
 				if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout_ms)
 				{
