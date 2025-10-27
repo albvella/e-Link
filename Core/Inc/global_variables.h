@@ -34,18 +34,26 @@
 #define TEMP_LEN                   2
 #define PRESS_HALF_LEN             PRESS_FULL_SAMPLES
 
-#define SAVING_BUFFER_LEN         PRESS_HALF_LEN + MAX_VOLUME_LEN + ACCELERATION_LEN
+#define SAVING_BUFFER_LEN          PRESS_HALF_LEN + MAX_VOLUME_LEN + ACCELERATION_LEN
 
-#define SAMPLE_SIZE               SAVING_BUFFER_LEN
+#define SAMPLE_SIZE                SAVING_BUFFER_LEN
 
-#define MAX_COMPRESSED_SIZE       1200
-#define METADATA_SIZE             6
+#define MAX_COMPRESSED_SIZE        1200
+#define METADATA_SIZE              6
 
-#define RAM_FIRST_BUFFER_ADD      0
-#define RAM_SECOND_BUFFER_ADD     0x400000
+#define SAVING_SAMPLE_SIZE         540
 
-#define SIM_PROMPT_TIMEOUT_MS 3000
-#define SIM_CONNECTION_TIMEOUT_MS 60000
+#define RAM_FIRST_BUFFER_ADD       0
+#define RAM_SECOND_BUFFER_ADD      0x400000
+
+#define SIM_PROMPT_TIMEOUT_MS      10000
+#define SIM_CONNECTION_TIMEOUT_MS  60000
+
+#define PROMPT                     0x203E0A0D            // "\r\n> "
+#define SENDOK_H                   0x45530A0D            // "/r/nSE "
+#define SENDOK_L                   0x4F20444E            // "ND O"
+#define ERROR                      0x4F525245            // "ERRO"
+#define COMMAND                    0x444D432B            // "+CMD"
 
 
 extern Machine_State_TypeDef state;
@@ -84,6 +92,7 @@ extern uint32_t Saved_Bytes;
 extern uint16_t Saved_Samples;
 extern uint32_t Send_Measure_Addr;
 extern uint8_t tcp_chunk[1460];
+extern uint32_t Measure_Bytes_Sent;
 
 extern FRESULT res;
 

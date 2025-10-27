@@ -43,7 +43,8 @@ Core/Src/DS18B20.o: ../Core/Src/DS18B20.c ../Core/Inc/DS18B20.h \
  ../Core/Inc/global_variables.h ../Core/Inc/INA3221.h \
  ../Core/Inc/INA3221_reg.h ../Core/Inc/lsm6dsv16x_reg.h \
  ../Core/Inc/peripherals.h \
- ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_ll_usart.h
+ ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_ll_usart.h \
+ ../Core/Inc/main.h
 ../Core/Inc/DS18B20.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
@@ -94,3 +95,4 @@ Core/Src/DS18B20.o: ../Core/Src/DS18B20.c ../Core/Inc/DS18B20.h \
 ../Core/Inc/lsm6dsv16x_reg.h:
 ../Core/Inc/peripherals.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_ll_usart.h:
+../Core/Inc/main.h:

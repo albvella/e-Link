@@ -73,6 +73,9 @@ int SIM_Init(void)
 	SIM_Send_Command("AT+CMNB=2\r");                                                              //1=CAT-M, 2=NB-IoT, 3=Automatico
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
+	SIM_Send_Command("AT+CLTS=1\r");                                                              //Abilitazione sincronizzazione orologio
+	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+
 	SIM_Send_Command("AT+CPIN?\r");																  //Controllo PIN
 	SIM_Receive_Response(response, 5000);
 	if(strstr(response, "READY") == NULL)
@@ -94,9 +97,9 @@ int SIM_Init(void)
 
 	SIM_Send_Command("AT+CGDCONT?\r");
 	SIM_Receive_Response(response, 5000);
-	if(strstr(response, sys.apn) == NULL || strstr(response, "IPV4V6") == NULL)
+	if(strstr(response, sys.apn) == NULL || strstr(response, "IPV4V6") != NULL)
 	{
-		sprintf(command, "AT+CGDCONT=1,\"IPV4V6\",\"%s\"\r", sys.apn);                                //Configurazione APN
+		sprintf(command, "AT+CGDCONT=1,\"IP\",\"%s\"\r", sys.apn);                                //Configurazione APN
 		SIM_Send_Command(command);
 		SIM_Receive_Response(response, 5000);
 	}
@@ -134,7 +137,7 @@ int SIM_Init(void)
 	SIM_Receive_Response(response, 5000);
 	int stat = 0;
 	uint32_t cereg_start = HAL_GetTick();
-	const uint32_t CEREG_TIMEOUT = 300000;
+	const uint32_t CEREG_TIMEOUT = 30000;
 	while(stat != 1 && (HAL_GetTick() - cereg_start) < CEREG_TIMEOUT)
 	{
 		char* cereg_ptr = strstr(response, "+CEREG:");
@@ -161,6 +164,7 @@ int SIM_Init(void)
 	}
 	if(stat != 1)
 	{
+		SIM_Power_Off();
 		return -1;  
 	}
 
@@ -196,46 +200,60 @@ int SIM_Init(void)
 		goto TCP;
 	}
 
-	sprintf(command, "AT+CNACT=1,\"%s\"\r", sys.apn);                                             //Attivazione contesto PDP
-	SIM_Send_Command(command);
-	SIM_Wait_Response("OK");
-	SIM_Receive_Response(response, 5000);
-	if(strstr(response, "+APP PDP: ACTIVE") == NULL)
-	{
-		uint32_t pdp_start = HAL_GetTick();
-    	const uint32_t PDP_TIMEOUT = 120000; 
-		while(strstr(response, "+APP PDP: ACTIVE") == NULL && (HAL_GetTick() - pdp_start) < PDP_TIMEOUT)
-		{
-			sprintf(command, "AT+CNACT=1,\"%s\"\r", sys.apn);
-			SIM_Send_Command(command);
-			SIM_Wait_Response("OK");
-			SIM_Receive_Response(response, 5000);
-			HAL_Delay(1000);
-		}
-		if(strstr(response, "+APP PDP: ACTIVE") == NULL)
-		{
-			return -1;  
-		}
-	}
+	SIM_Send_Command("AT+CIPSHUT\r");
+	SIM_Receive_Response(response, 65000);
 
-	SIM_Send_Command("AT+CNACT?\r");                                                              //Verifica indirizzo IP
-	SIM_Receive_Response(response, 5000);
-	uint32_t ip_start = HAL_GetTick();
-	const uint32_t IP_TIMEOUT = 120000;
-	while(!SIM_Check_IP(response) && (HAL_GetTick() - ip_start) < IP_TIMEOUT)
-	{
-		SIM_Send_Command("AT+CNACT?\r");
-		SIM_Receive_Response(response, 5000);
-		HAL_Delay(1000);
-	}
-	if(!SIM_Check_IP(response))
-	{
-		return -1;  
-	}
+//	sprintf(command, "AT+CNACT=1,\"%s\"\r", sys.apn);                                             //Attivazione contesto PDP
+//	SIM_Send_Command(command);
+//	SIM_Wait_Response("OK");
+//	SIM_Receive_Response(response, 5000);
+//	if(strstr(response, "+APP PDP: ACTIVE") == NULL)
+//	{
+//		uint32_t pdp_start = HAL_GetTick();
+//    	const uint32_t PDP_TIMEOUT = 120000;
+//		while(strstr(response, "+APP PDP: ACTIVE") == NULL && (HAL_GetTick() - pdp_start) < PDP_TIMEOUT)
+//		{
+//			sprintf(command, "AT+CNACT=1,\"%s\"\r", sys.apn);
+//			SIM_Send_Command(command);
+//			SIM_Wait_Response("OK");
+//			SIM_Receive_Response(response, 5000);
+//			HAL_Delay(1000);
+//		}
+//		if(strstr(response, "+APP PDP: ACTIVE") == NULL)
+//		{
+//			SIM_Power_Off();
+//			return -1;
+//		}
+//	}
+//
+//	SIM_Send_Command("AT+CNACT?\r");                                                              //Verifica indirizzo IP
+//	SIM_Receive_Response(response, 5000);
+//	uint32_t ip_start = HAL_GetTick();
+//	const uint32_t IP_TIMEOUT = 120000;
+//	while(!SIM_Check_IP(response) && (HAL_GetTick() - ip_start) < IP_TIMEOUT)
+//	{
+//		SIM_Send_Command("AT+CNACT?\r");
+//		SIM_Receive_Response(response, 5000);
+//		HAL_Delay(1000);
+//	}
+//	if(!SIM_Check_IP(response))
+//	{
+//		return -1;
+//	}
 	
 	TCP:
 	SIM_Send_Command("AT+CIPRXGET=0\r");                                                         //Impostazione ricezione automatica da server TCP
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+
+	sprintf(command, "AT+CSTT=\"%s\",\"\",\"\"\r", sys.apn);
+	SIM_Send_Command(command);
+	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+
+	SIM_Send_Command("AT+CIICR\r");
+	SIM_Receive_Response(response, 65000);
+
+	SIM_Send_Command("AT+CIFSR\r");
+	SIM_Receive_Response(response, 65000);
 
 	const uint32_t MAX_TCP_RETRIES = 3;
 	uint32_t retry_count = 0;
@@ -256,11 +274,8 @@ int SIM_Init(void)
 		{
 			if(strstr(response, "PDP DEACT") != NULL)
 			{
-				sprintf(command, "AT+CNACT=1,\"%s\"\r", sys.apn);
-				SIM_Send_Command(command);
-				SIM_Wait_Response("OK");
-				SIM_Receive_Response(response, 5000);
-				HAL_Delay(10000);
+				SIM_Send_Command("AT+CIPSHUT\r");
+				SIM_Receive_Response(response, 65000);
 			}
 			else if(strstr(response, "TCP CLOSED") != NULL)
 			{
@@ -286,22 +301,23 @@ int SIM_Init(void)
 		return -1;  
 	}
 
-	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        //Verifica connessione al server TCP
-	SIM_Receive_Response(response, 5000);
-	uint32_t status_start = HAL_GetTick();
-	const uint32_t CIPSTATUS_TIMEOUT = 30000;  
-
-	while(!SIM_Check_TCP_State(response) && (HAL_GetTick() - status_start) < CIPSTATUS_TIMEOUT)
-	{
-		SIM_Send_Command("AT+CIPSTATUS=0\r");
-		SIM_Receive_Response(response, 5000);
-		HAL_Delay(1000);
-	}
-
-	if(!SIM_Check_TCP_State(response))
-	{
-		return -1;  
-	}
+//	SIM_Send_Command("AT+CIPSTATUS\r");                                                        //Verifica connessione al server TCP
+//	SIM_Wait_Response("OK");
+//	SIM_Receive_Response(response, 5000);
+//	uint32_t status_start = HAL_GetTick();
+//	const uint32_t CIPSTATUS_TIMEOUT = 30000;
+//
+//	while(!SIM_Check_TCP_State(response) && (HAL_GetTick() - status_start) < CIPSTATUS_TIMEOUT)
+//	{
+//		SIM_Send_Command("AT+CIPSTATUS\r");
+//		SIM_Receive_Response(response, 5000);
+//		HAL_Delay(1000);
+//	}
+//
+//	if(!SIM_Check_TCP_State(response))
+//	{
+//		return -1;
+//	}
 
 	return 0;
 }
@@ -333,7 +349,6 @@ void SIM_Power_Off(void)
         if(HAL_GetTick() - timeout > 5000) break; 
         HAL_Delay(100);
     }
-    HAL_Delay(5000);
 }
 
 /*------RESET DEL MODULO LTE------*/
@@ -343,6 +358,18 @@ void SIM_Reset(void)
 	HAL_Delay(300);
 	HAL_GPIO_WritePin(LTE_RESET_GPIO_Port, LTE_RESET_Pin, GPIO_PIN_RESET);
 	while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);
+}
+
+/*-----SEQUENZA DI ACCENSIONE-----*/
+void SIM_Startup_Seq(void)
+{
+	if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET)
+	{
+		SIM_Power_On();
+		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);            //Attesa accensione modulo
+
+	}
+	SIM_Reset();
 }
 
 /*------INVIO COMANDO AL MODULO LTE------*/
@@ -411,7 +438,7 @@ int SIM_Check_TCP_State(const char* response)
     char* cipstatus_pos = strstr(response, "+CIPSTATUS: 0");
     if(cipstatus_pos != NULL) {
         // Cerca "CONNECTED" nella stessa riga
-        if(strstr(cipstatus_pos, "CONNECTED") != NULL) {
+        if(strstr(cipstatus_pos, "CONNECT OK") != NULL) {
             return 1;
         }
     }
@@ -429,7 +456,7 @@ void SIM_Parse_Command(void)
 		// Estrai il valore del comando (cmd_val) come stringa
 		char cmd_str[8] = {0};
 		int i = 0;
-		while(pos[i] != ',' && pos[i] != '\0' && i < 7) 
+		while(pos[i] != ',' && pos[i] != '\0' && i < 3)
 		{
 			cmd_str[i] = pos[i];
 			i++;
@@ -440,7 +467,7 @@ void SIM_Parse_Command(void)
 		char* data_pos = pos + i;
 		if(*data_pos == ',') data_pos++;
 
-		if(strcmp(cmd_str, "IDL") == 0) 
+		if(strcmp(cmd_str, "IDL") == 0)
 		{
 			flags.CMD.Idle = 1;
 		} 
@@ -456,11 +483,11 @@ void SIM_Parse_Command(void)
 		{
 			if(strcmp(data_pos, "1") == 0)
 			{
-				flags.CMD.Data_Request = 1;
+				sys.Log_Request = 1;
 			}
 			else if(strcmp(data_pos, "0") == 0)
 			{
-				flags.CMD.Data_Request = 0;
+				sys.Log_Request = 0;
 			}
 		} 
 		else if(strcmp(cmd_str, "MSR") == 0) 
@@ -468,7 +495,7 @@ void SIM_Parse_Command(void)
 			if(!flags.CMD.Measure_Request) 
 			{
 				LED_Start(RED_LED, FAST, LOW);
-				Send_Measure_Addr = Saved_Bytes;
+				Send_Measure_Addr = sys.Current_RAM_Address;
 				flags.CMD.Measure_Request = 1;
 				Switch_Buffer();
 			}
@@ -509,38 +536,34 @@ void SIM_Parse_Cfg(char* cmd_start)
     memset(cfg_var, 0, sizeof(cfg_var));
     memset(new_cfg_val, 0, sizeof(new_cfg_val));
     
-	char* pos = cmd_start + 4; // Salta "SET,"
+    char* pos = cmd_start; // cmd_start arriva già dopo "SET,"
 
-	// Prima virgola (dopo SET)
-	char* comma1 = strchr(pos, ',');
-	if(!comma1) return;
+    // Prima virgola
+    char* comma1 = strchr(pos, ',');
+    if(!comma1) return;
 
-	// Seconda virgola
-	char* comma2 = strchr(comma1 + 1, ',');
-	if(!comma2) return;
+    // Seconda virgola
+    char* comma2 = strchr(comma1 + 1, ',');
+    if(!comma2) return;
 
-	// Terza virgola
-	char* comma3 = strchr(comma2 + 1, ',');
-	if(!comma3) return;
+    // Estrai cfg_var (dall'inizio alla prima virgola)
+    int var_len = comma1 - pos;
+    if(var_len > 0 && var_len < sizeof(cfg_var)) 
+    {
+        strncpy(cfg_var, pos, var_len);
+        cfg_var[var_len] = '\0';
+    }
 
-	// Estrai cfg_var (tra SET, e prima virgola)
-	int var_len = comma2 - comma1 - 1;
-	if(var_len > 0 && var_len < sizeof(cfg_var)) 
-	{
-		strncpy(cfg_var, comma1 + 1, var_len);
-		cfg_var[var_len] = '\0';
-	}
+    // Estrai cfg_idx (dalla prima virgola alla seconda)
+    cfg_idx = atoi(comma1 + 1);
 
-	// Estrai cfg_idx
-	cfg_idx = atoi(comma2 + 1);
-
-	// Estrai new_cfg_val
-	int val_len = strlen(comma3 + 1);
-	if(val_len > 0 && val_len < sizeof(new_cfg_val)) 
-	{
-		strncpy(new_cfg_val, comma3 + 1, val_len);
-		new_cfg_val[val_len] = '\0';
-	}
+    // Estrai new_cfg_val (dalla seconda virgola in poi)
+    int val_len = strlen(comma2 + 1);
+    if(val_len > 0 && val_len < sizeof(new_cfg_val)) 
+    {
+        strncpy(new_cfg_val, comma2 + 1, val_len);
+        new_cfg_val[val_len] = '\0';
+    }
 }
 
 /*-----RECUPERO VALORE DI CONFIGURAZIONE-----*/
@@ -549,7 +572,7 @@ void SIM_Get_Cfg(char* cmd_start)
 	memset(cfg_var, 0, sizeof(cfg_var));
 	memset(new_cfg_val, 0, sizeof(new_cfg_val));
 	
-	char* pos = cmd_start + 4; // Salta "GET,"
+	char* pos = cmd_start;
 
 	// Prima virgola (dopo GET)
 	char* comma1 = strchr(pos, ',');
@@ -560,10 +583,10 @@ void SIM_Get_Cfg(char* cmd_start)
 	if(!comma2) return;
 
 	// Estrai cfg_var (tra GET, e prima virgola)
-	int var_len = comma2 - comma1 - 1;
+	int var_len = comma1 - pos;
 	if(var_len > 0 && var_len < sizeof(cfg_var)) 
 	{
-		strncpy(cfg_var, comma1 + 1, var_len);
+		strncpy(cfg_var, pos, var_len);
 		cfg_var[var_len] = '\0';
 	}
 
@@ -629,17 +652,26 @@ void SIM_Send_TCP(char* data)
 /*-----INVIO DATI AL SERVER TCP CON DMA-----*/
 void SIM_Send_TCP_Chunk_DMA(uint16_t size)
 {
-    char cmd[50];
+    char cmd[18];
 
     sprintf(cmd, "AT+CIPSEND=%u\r", size);
     SIM_Send_Command_DMA(cmd);
+}
+
+/*-----INVIO DATI AL SERVER TCP SENZA DMA-----*/
+void SIM_Send_TCP_Chunk(uint16_t size)
+{
+    char cmd[18];
+
+    sprintf(cmd, "AT+CIPSEND=%u\r", size);
+    SIM_Send_Command(cmd);
 }
 
 /*-----INVIO INFORMAZIONI AL SERVER MQTT-----*/
 void SIM_Send_Infos(void)
 {
 	uint16_t len = 0;
-	char command[128];
+	char command[18];
 	char infos[512];
 	uint16_t new_temp = 0;
 
@@ -659,6 +691,7 @@ void SIM_Send_Infos(void)
 	SIM_Wait_Response(">");
 	HAL_UART_Transmit(SIM_UART, (uint8_t*)infos, len, 100);
 	SIM_Wait_Response("OK");
+	memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
 }
 
 /*-----ATTESA RISPOSTA-----*/
@@ -690,12 +723,16 @@ int SIM_Wait_Response(const char* expected)
 /*-----CONTROLLA STATO CONNESSIONE-----*/
 void SIM_Check_Connection(void)
 {
-	char command_sim[256];
+	char command[6];
 	char response_sim[256];
 	uint32_t start_time;
     const uint32_t CEREG_TIMEOUT = 180000;  
     const uint32_t TCP_TIMEOUT = 120000;     
     const uint32_t MAX_TCP_ATTEMPTS = 5;    
+
+
+    HAL_UART_DMAStop(SIM_UART);
+	memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
 
 	int registered = 0;
 	start_time = HAL_GetTick();
@@ -720,23 +757,32 @@ void SIM_Check_Connection(void)
         HAL_NVIC_SystemReset(); 
     }
 
-	SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
-	SIM_Receive_Response(response_sim, 5000);
+	int connected = 0;
 	start_time = HAL_GetTick();
     uint32_t tcp_attempts = 0;
-	while(!SIM_Check_TCP_State(response_sim) && (HAL_GetTick() - start_time) < TCP_TIMEOUT && tcp_attempts < MAX_TCP_ATTEMPTS)
+    sprintf(command, "H:%u", config.device_id);
+	while(!connected && (HAL_GetTick() - start_time) < TCP_TIMEOUT && tcp_attempts < MAX_TCP_ATTEMPTS)
 	{
-		sprintf(command_sim, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);       
-		SIM_Send_Command(command_sim);
-		SIM_Wait_Response("CONNECT OK");
-		SIM_Send_Command("AT+CIPSTATUS=0\r");                                                        
+		SIM_Send_Command("AT+CIPSEND=3\r");
+		SIM_Wait_Response(">");
+		SIM_Send_Command(command);
 		SIM_Receive_Response(response_sim, 5000);
-		tcp_attempts++;
-		HAL_Delay(2000);
+
+		if(strstr(response_sim, "SEND OK") != NULL)
+		{
+			connected = 1;
+		}
+		else
+		{
+			tcp_attempts++;
+			HAL_Delay(2000);
+		}
 	}
 
-	if(!SIM_Check_TCP_State(response_sim)) 
+	if(!connected)
 	{
         HAL_NVIC_SystemReset();
     }
+
+	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 }

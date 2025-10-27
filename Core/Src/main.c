@@ -115,6 +115,7 @@ uint32_t Saved_Bytes = 0;
 uint16_t Saved_Samples = 0;
 uint32_t Send_Measure_Addr = 0;
 uint8_t tcp_chunk[1460] = {0};
+uint32_t Measure_Bytes_Sent = 0;
 
 FRESULT res;
 
@@ -155,16 +156,15 @@ const uint16_t step_size_table_12bit[88] = {                                    
 const int8_t index_adjustment_table[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
 
 const unsigned char base64_table[256] = {
-	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80, // 0x00-0x0F
-	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80, // 0x10-0x1F
+	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,  // 0x00-0x0F
+	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,  // 0x10-0x1F
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,62,   0x80,0x80,0x80,63,   // 0x20-0x2F
-	    52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  0x80,0x80,0x80,64,  0x80,0x80,     // 0x30-0x3F
-	    0x80,0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,        // 0x40-0x4F
-	    15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  0x80,0x80,0x80,0x80,0x80,      // 0x50-0x5F
-	    0x80,26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,        // 0x60-0x6F
-	    41,  42,  43,  44,  45,  46,  47,  48,  49,  50,  51,  0x80,0x80,0x80,0x80,0x80,      // 0x70-0x7F
-	    // Resto: tutti 0x80 (caratteri non validi)
-	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
+	    52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  0x80,0x80,0x80,64,  0x80,0x80,  // 0x30-0x3F
+	    0x80,0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,    // 0x40-0x4F
+	    15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  0x80,0x80,0x80,0x80,0x80,  // 0x50-0x5F
+	    0x80,26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,    // 0x60-0x6F
+	    41,  42,  43,  44,  45,  46,  47,  48,  49,  50,  51,  0x80,0x80,0x80,0x80,0x80,  // 0x70-0x7F
+	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,  // Resto: tutti 0x80 (caratteri non validi)
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
@@ -274,7 +274,7 @@ int main(void)
 				}
 				else if(flags.CMD.Get_Config)
 				{
-					Get_Config();
+					Send_Config();
 					flags.CMD.Get_Config = 0;
 				}
 				else if(flags.CMD.Start_OTA)
@@ -311,6 +311,7 @@ int main(void)
 				  LED_Stop(ORG_LED);
 				  flags.TCP_Parameter_Changed = 0;
 				}
+				sys.SIM_Connection_Status = HAL_GetTick();
 				LED_Stop(RED_LED);
 			}
 			else if(HAL_GetTick() - sys.SIM_Connection_Status > config.connection_timeout_ms)                  // Controllo connessione al server TCP ogni config.connection_timeout_ms millisecondi
@@ -354,17 +355,18 @@ int main(void)
 						LED_Start(GRN_LED, MEDIUM, HALF);
 						state = IDLE;
 						flags.CMD.Idle = 0;
+						break;
 					}
 				}
-				if(flags.CMD.Data_Request)
+				if(sys.Log_Request)
 				{
 					if(HAL_GetTick() - sys.Log_Status > config.log_period_ms && !flags.Log_TransferInProgress && !flags.Meas_TransferInProgress)
 					{
 						LED_Start(ORG_LED, FAST, HIGH);
 						sprintf(Data_Logging, "L:%u,%u,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", config.device_id, Last_Pressure, Last_Volume, Last_Acceleration.x, Last_Acceleration.y, Last_Acceleration.z, Vbatt, Supply.i1, Supply.i2, Supply.i3, Supply.v1, Supply.v2, Supply.v3, Temperature);
-						SIM_Send_TCP_Chunk_DMA(strlen(Data_Logging));
+						SIM_Send_TCP_Chunk((uint16_t)strlen(Data_Logging));
 						sys.SIM_Prompt_Status = HAL_GetTick();
-						sys.Log_Status = HAL_GetTick();
+						sys.Log_Status = sys.SIM_Prompt_Status;
 						flags.Log_TransferInProgress = 1;
 					}
 					if(flags.Log_ReadytoSend)
@@ -373,33 +375,45 @@ int main(void)
 						LED_Stop(ORG_LED);
 						flags.SIM_isConnected = 1;
 						flags.Log_ReadytoSend = 0;
-						flags.Log_TransferInProgress = 0;
 					}
 				}
 				if(flags.CMD.Measure_Request)
 				{
 					if(!flags.Meas_TransferInProgress && !flags.Log_TransferInProgress && !flags.Measure_ReadytoSend)
 					{
-						Send_Measure_Addr = Send_Measure_Chunk(sys.RAM_Buffer_Base_tosend, sys.Inactive_RAM_Len, Send_Measure_Addr);
-						sys.SIM_Prompt_Status = HAL_GetTick();
-						flags.Meas_TransferInProgress = 1;
+						if (Send_Measure_Addr == (uint32_t)-1 || Measure_Bytes_Sent >= sys.Inactive_RAM_Len)
+						{
+							memset(tcp_chunk, 0, 1460);
+							LED_Stop(RED_LED);
+							flags.CMD.Measure_Request = 0;
+							Measure_Bytes_Sent = 0;
+							Send_Measure_Addr = 0;
+						}
+						else
+						{
+							uint32_t old_addr = Send_Measure_Addr;
+							Send_Measure_Addr = Send_Measure_Chunk(sys.Inactive_RAM_Base, sys.Inactive_RAM_Len, Send_Measure_Addr);
+							if (Send_Measure_Addr != (uint32_t)-1 && Send_Measure_Addr > old_addr)
+							{
+								Measure_Bytes_Sent += (Send_Measure_Addr - old_addr);
+							}
+							else if (Send_Measure_Addr != (uint32_t)-1 && Send_Measure_Addr < old_addr)
+							{
+								Measure_Bytes_Sent += (Send_Measure_Addr + sys.Inactive_RAM_Len) - old_addr;
+							}
+							sys.SIM_Prompt_Status = HAL_GetTick();
+							flags.Meas_TransferInProgress = 1;
+						}
 					}
 					if(flags.Measure_ReadytoSend)
 					{
 						SIM_Send_Command_DMA((char*)tcp_chunk);
 						flags.Measure_ReadytoSend = 0;
-						if (Send_Measure_Addr == (uint32_t)-1)
-						{
-							  memset(tcp_chunk, 0, 1460);
-							  LED_Stop(RED_LED);
-							  flags.CMD.Measure_Request = 0;
-						}
 					}
 				}
 				if(sys.SIM_Prompt_Status > 0 && (HAL_GetTick() - sys.SIM_Prompt_Status) > SIM_PROMPT_TIMEOUT_MS)
 				{
-					  char cmd = 0x1A;
-					  SIM_Send_Command_DMA(&cmd);
+					  SIM_Send_Command_DMA("\x1A");
 					  flags.Log_TransferInProgress = 0;
 					  flags.Meas_TransferInProgress = 0;
 					  flags.Measure_ReadytoSend = 0;
@@ -1118,7 +1132,7 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
+  sConfigOC.Pulse = 1;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
@@ -1306,6 +1320,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* USER CODE END MX_GPIO_Init_2 */

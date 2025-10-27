@@ -32,22 +32,21 @@ void System_Init(void)
 	FatFS_Init();
 	Config_Init();
 	Acc_Init(&acc, config.samp_freq);
-	LED_Start(ORG_LED, FAST, HALF);
-	if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET)
-	{
-		SIM_Power_On();
-		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);            //Attesa accensione modulo
+	Temperature = Temperature_Init();
 
-	}
-	SIM_Reset();
+	LED_Start(ORG_LED, FAST, HALF);
+	SIM_Startup_Seq();
 	while(SIM_Init() != HAL_OK);
 	LED_Stop(ORG_LED);
+
 	RTC_Init();
-	Temperature = Read_Temperature();
 
 	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);
-
 	LED_Start(GRN_LED, MEDIUM, HALF);
+	sys.SIM_Connection_Status = HAL_GetTick();
+	sys.Log_Request = 1;
+	sys.Low_th = 0;
+	sys.High_th = 4096;
 }
 
 /*-----INIZiALIZZAZIONE MEMORIE-----*/
@@ -189,6 +188,7 @@ int Acc_Init(stmdev_ctx_t* acc, uint16_t fs)
 	lsm6dsv16x_fifo_watermark_set(acc, ACC_FIFO_WATERMARK);
 	lsm6dsv16x_pin_int1_route_set(acc, &pin_int);
 
+
 	__HAL_GPIO_EXTI_CLEAR_IT(ACC_INTERRUPT);
 	return 0;
 }
@@ -200,6 +200,7 @@ void Config_Init(void)
     UINT bytes_read;
     UINT bytes_written;
 
+	f_unlink(CONFIG_FILE); //DA RIMUOVERE DOPO I TEST
     if (f_open(&config_file, CONFIG_FILE, FA_READ) == FR_OK) 
 	{
         if (f_read(&config_file, &config, sizeof(config), &bytes_read) == FR_OK && bytes_read == sizeof(config))
@@ -210,9 +211,9 @@ void Config_Init(void)
         f_close(&config_file);
     }
 
-    config.device_id = 0;
+    config.device_id = 1;
 	config.samp_freq = 800;
-	config.buffering_secs = 30;
+	config.buffering_secs = 10;
 	config.connection_timeout_ms = 60000;
 	config.log_period_ms = 10000;
 	config.hammer_th = 4096;
@@ -222,7 +223,7 @@ void Config_Init(void)
         config.high_th[i] = 4096;
     }
     strcpy(config.tcp_IPaddress, "esdplab.unipa.it");
-    strcpy(config.tcp_Port, "8080");
+    strcpy(config.tcp_Port, "21001");
 
     if (f_open(&config_file, CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
     {

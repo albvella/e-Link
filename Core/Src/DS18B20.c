@@ -9,6 +9,7 @@
 #include "global_variables.h"
 #include "peripherals.h"
 #include "stm32l4xx_ll_usart.h"
+#include "main.h"
 
 
 /*------INIZIALIZZAZIONE SENSORE DI TEMPERATURA------*/
@@ -16,18 +17,22 @@ void Temp_Sensor_Init(void)
 {
 	uint8_t data = 0xF0;
 
-	LL_USART_SetBaudRate(huart4.Instance, HAL_RCC_GetPCLK2Freq(), UART_OVERSAMPLING_16, 9600);
+	LL_USART_SetBaudRate(huart4.Instance, HAL_RCC_GetPCLK1Freq(), UART_OVERSAMPLING_16, 9600);
+//	UART4->CR1 &= ~(USART_CR1_UE);  // Disabilita UART
+//	UART4->BRR = 9600;       // Imposta nuovo baud rate
+//	UART4->CR1 |= USART_CR1_UE;      // Riabilita UART
 
 	HAL_UART_Transmit(TEMP_UART, &data, 1, 100);  // low for 500+us
 	if (HAL_UART_Receive(TEMP_UART, &data, 1, 1000) != HAL_OK)
 		while(1);
 
-	LL_USART_SetBaudRate(huart4.Instance, HAL_RCC_GetPCLK2Freq(), UART_OVERSAMPLING_16, 115200);
+	LL_USART_SetBaudRate(huart4.Instance, HAL_RCC_GetPCLK1Freq(), UART_OVERSAMPLING_16, 115200);
+//	UART4->CR1 &= ~(USART_CR1_UE);  // Disabilita UART
+//	UART4->BRR = 115200;       // Imposta nuovo baud rate
+//	UART4->CR1 |= USART_CR1_UE;      // Riabilita UART
 
 	if (data == 0xF0)
 		while(1);
-
-	Temp_Sensor_Write(0xCC);  // skip ROM
 }
 
 /*------SCRITTURA SU SENSORE DI TEMPERATURA------*/
@@ -72,12 +77,30 @@ uint8_t Temp_Sensor_ReadBit(void)
     uint8_t RxBit;
 
     // Send Read Bit CMD
-    HAL_UART_Transmit(&huart1, &ReadBitCMD, 1, 1);
+    HAL_UART_Transmit(TEMP_UART, &ReadBitCMD, 1, 100);
     // Receive The Bit
-    HAL_UART_Receive(&huart1, &RxBit, 1, 1);
+    HAL_UART_Receive(TEMP_UART, &RxBit, 1, 1000);
 
     return (RxBit & 0x01);
 }
+
+/*-----INIZIO CONVERSIONE-----*/
+void Temp_Start_Conversion(void)
+{
+	Temp_Sensor_Init();
+	Temp_Sensor_Write(0xCC);  // skip ROM
+	Temp_Sensor_Write(0x44);  // convert T
+}
+
+/*------INIZIALIZZAZIONE E LETTURA TEMPERATURA------*/
+uint16_t Temperature_Init(void)
+{
+	Temp_Start_Conversion();
+	HAL_Delay(2000);
+	return Read_Temperature();
+}
+
+
 
 /*------LETTURA TEMPERATURA------*/
 uint16_t Read_Temperature(void)
@@ -85,24 +108,18 @@ uint16_t Read_Temperature(void)
 	uint8_t Temp_LSB = 0;
 	uint8_t Temp_MSB = 0;
 	uint16_t Temp = 0;
-	
+
 	Temp_Sensor_Init();
 	Temp_Sensor_Write(0xCC);  // skip ROM
-
-	uint8_t status = Temp_Sensor_ReadBit();
-
-	if (status) 
+	Temp_Sensor_Write(0xBE);         // read Scratch-pad
+	Temp_LSB = Temp_Sensor_ReadByte();
+	Temp_MSB = Temp_Sensor_ReadByte();
+	Temp = ((Temp_MSB << 8)) | Temp_LSB;
+	if (Temp != 0x0550 && Temp != 0x0000 && Temp != 0xFFFF)
 	{
-		Temp_Sensor_Write(0xBE);  // read Scratch-pad
-		Temp_LSB = Temp_Sensor_ReadByte();
-	    Temp_MSB = Temp_Sensor_ReadByte();
-		Temp_Sensor_Init();
-		Temp_Sensor_Write(0xCC);  // skip ROM
-		Temp_Sensor_Write(0x44);  // convert t
-		Temp = ((Temp_MSB << 8)) | Temp_LSB;
+		Temp_Start_Conversion();
 		return Temp;
 	}
-	
-	return 0; 
-}
 
+	return 0;
+}

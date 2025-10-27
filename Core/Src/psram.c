@@ -265,7 +265,15 @@ int raw_psram_read_write(uint8_t write, uint32_t address, uint32_t nbytes, uint8
 	if(!psramInitDone || pBuffer==NULL)return -1;
 	if(address + nbytes >= psramSize)return -2;
 
-	trBytes = 1024 - address % 1024;
+	if(nbytes > 1024)
+	{
+		trBytes = 1024 - address % 1024;
+	}
+	else
+	{
+		trBytes = nbytes;
+	}
+
 	while(nbytes > 0)
 	{
 		result = psram_internal_read_write(write, address, trBytes, wPtr);

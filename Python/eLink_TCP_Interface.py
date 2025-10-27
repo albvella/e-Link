@@ -11,7 +11,7 @@ class eLinkTCPServer:
     Server TCP per la gestione di dispositivi e-Link.
     Gestisce connessioni multiple, invio comandi, ricezione misure, OTA e code di messaggi.
     """
-    def __init__(self, host='esdplab.unipa.it', port=9000, handler=None):
+    def __init__(self, host='0.0.0.0', port=21001, handler=None):
         """
         Inizializza il server TCP.
 
@@ -34,7 +34,7 @@ class eLinkTCPServer:
         self.client_log_queues = {}
         self.client_reply_queues = {} 
         self.client_meas_queues = {}
-        self.allowed_commands = ["IDL", "SRT", "PNG", "SND", "MSR", "OTA", "SET", "GET", "RST"]
+        self.allowed_commands = ["IDL", "SRT", "PNG", "SND,1", "SND,0", "MSR", "OTA", "SET", "GET", "RST"]
         self.allowed_vars = ["DEVICE_ID", "SAMP_FREQ", "BUFFER_SECS", "CONN_TIMEOUT", "LOG_PERIOD", "HAMMER_TH", "HIGH_TH", "LOW_TH", "TCP_IP", "TCP_PORT"]
 
     def start(self):
@@ -95,6 +95,8 @@ class eLinkTCPServer:
             else:
                 if command != "SET" and command != "GET":
                     payload = f"+CMD,{command}"
+                    if command == "SND" and cfg_var is not None:
+                        payload += f",{cfg_var}"
                 else:
                     print(f"SET and GET commands require cfg_var and cfg_val (and cfg_idx for SET).")
                     return False
@@ -110,6 +112,7 @@ class eLinkTCPServer:
     def receive_measure(self, client_sock, filename=None):
         """
         Riceve dati di misura dal client e li salva su file.
+        Usa lunghezza minima per rilevare messaggi completi.
 
         Args:
             client_sock (socket.socket): Socket del client.
@@ -123,24 +126,64 @@ class eLinkTCPServer:
 
         def worker():
             with open(filename, "ab") as f:
+                # ✅ BUFFER PER RICOSTRUIRE MESSAGGI FRAMMENTATI
+                message_buffer = b""
+                min_expected_length = 1380  # ✅ LUNGHEZZA MINIMA per messaggio completo
+                
                 while True:
                     try:
                         try:
-                            chunk = self.client_meas_queues[client_sock.getpeername()].get(timeout=5)
+                            # Ricevi chunk dal queue
+                            chunk = self.client_meas_queues[client_sock.getpeername()].get(timeout=10)
                         except queue.Empty:
                             print("Receive Timeout!")
                             break
+                        
                         if not chunk:
                             break
-                        try:
-                            bin_data = base64.b64decode(chunk)
-                            f.write(bin_data)
-                        except Exception as e:
-                            print(f"Base64 decode error: {e}")
-                            break
+                        
+                        # ✅ ACCUMULA I CHUNK NEL BUFFER
+                        message_buffer += chunk
+                        print(f"Received chunk: {len(chunk)} bytes, buffer total: {len(message_buffer)} bytes")
+                        
+                        # ✅ CONTROLLA SE ABBIAMO RAGGIUNTO LA LUNGHEZZA MINIMA
+                        if len(message_buffer) >= min_expected_length:
+                            try:
+                                # ✅ PROCESSA IL BUFFER COME MESSAGGIO COMPLETO
+                                print(f"Processing complete message: {len(message_buffer)} bytes")
+                                
+                                # ✅ DECODE BASE64 DEL MESSAGGIO COMPLETO
+                                bin_data = base64.b64decode(message_buffer)
+                                f.write(bin_data)
+                                print(f"Decoded and saved: {len(bin_data)} bytes")
+                                
+                                # ✅ RESET DEL BUFFER PER IL PROSSIMO MESSAGGIO
+                                message_buffer = b""
+                                
+                            except Exception as e:
+                                print(f"Base64 decode error: {e}")
+                                print(f"Message preview: {message_buffer[:50]}...")
+                                
+                                # ✅ FALLBACK: cerca inizio valido nel buffer
+                                # Trova il prossimo carattere Base64 valido
+                                valid_start = 0
+                                for i in range(len(message_buffer)):
+                                    test_char = message_buffer[i:i+1]
+                                    if test_char.isalnum() or test_char in b'+/=':
+                                        valid_start = i
+                                        break
+                                
+                                if valid_start > 0:
+                                    message_buffer = message_buffer[valid_start:]
+                                    print(f"Skipped {valid_start} invalid bytes")
+                                else:
+                                    # Se non trova caratteri validi, scarta tutto
+                                    message_buffer = b""
+                                
                     except Exception as e:
                         print(f"Socket error: {e}")
                         break
+                        
             print(f"Saved received measure to {filename}")
 
         t = threading.Thread(target=worker, daemon=True)
@@ -468,7 +511,9 @@ class eLinkTCPServer:
                         data_content = data[2:]
                         self.client_reply_queues[addr].put(data_content)
                         self._extract_device_id_from_reply(data_content, addr)
-                    elif len(data) > 400:
+                    elif data.startswith(b'H:'):
+                        pass
+                    elif len(data) > 100:
                         self.client_meas_queues[addr].put(data)
                     else:
                         print(f"Unknown data from {addr}: {data}")
@@ -500,53 +545,62 @@ def rx_handler(data):
     msg = {}
     if(data.startswith(b'L:')):
         try:
-            data = data[2:]
-            parts = data.split(",")
+            data_str = data[2:].decode('utf-8').strip()  
+            parts = data_str.split(",")
             msg = {
                 "ID" : int(parts[0]),
-                "Press": int(parts[1]) * press_FS / 4096,
-                "FLow": clock_freq / int(parts[2]),
-                "ax": int(parts[3]) * 0.061,
-                "ay": int(parts[4]) * 0.061,
-                "az": int(parts[5]) * 0.061,
-                "Vbatt": int(parts[6]) * 0.001,
-                "I1": (((int(parts[7]) >>3) if int(parts[7]) < 0x8000 else (int(parts[7]) - 0x10000) >>3) * 0.00004 / 0.08),
-                "I2": (((int(parts[8]) >>3) if int(parts[8]) < 0x8000 else (int(parts[8]) - 0x10000) >>3) * 0.00004 / 0.08),
-                "I3": (((int(parts[9]) >>3) if int(parts[9]) < 0x8000 else (int(parts[9]) - 0x10000) >>3) * 0.00004 / 0.08),
-                "V1": int(parts[10]) * 0.008,
-                "V2": int(parts[11]) * 0.008,
-                "V3": int(parts[12]) * 0.008,
-                "Temp": int(parts[13]) * 0.0625 if int(parts[13]) < 0x8000 else (int(parts[13]) - 0x10000) * 0.0625
+                "Press [bar]": f"{int(parts[1]) * press_FS / 4096:.4f}",
+                "FLow [L/s]": f"{((clock_freq / int(parts[2])) if int(parts[2]) != 0 else 0):.4f}",
+                "ax [mg]": f"{(int(parts[3]) - 65536 if int(parts[3]) > 32767 else int(parts[3])) * 0.061:.4f}",
+                "ay [mg]": f"{(int(parts[4]) - 65536 if int(parts[4]) > 32767 else int(parts[4])) * 0.061:.4f}",
+                "az [mg]": f"{(int(parts[5]) - 65536 if int(parts[5]) > 32767 else int(parts[5])) * 0.061:.4f}",
+                "Vbatt [V]": f"{int(parts[6]) * 0.001:.4f}",
+                "I1 [A]": f"{(((int(parts[7]) >>3) if int(parts[7]) < 0x8000 else (int(parts[7]) - 0x10000) >>3) * 0.00004 / 0.08):.4f}",
+                "I2 [A]": f"{(((int(parts[8]) >>3) if int(parts[8]) < 0x8000 else (int(parts[8]) - 0x10000) >>3) * 0.00004 / 0.08):.4f}",
+                "I3 [A]": f"{(((int(parts[9]) >>3) if int(parts[9]) < 0x8000 else (int(parts[9]) - 0x10000) >>3) * 0.00004 / 0.08):.4f}",
+                "V1 [V]": f"{int(parts[10]) * 0.001:.4f}",
+                "V2 [V]": f"{int(parts[11]) * 0.001:.4f}",
+                "V3 [V]": f"{int(parts[12]) * 0.001:.4f}",
+                "Temp [°C]": f"{(int(parts[13]) * 0.0625 if int(parts[13]) < 0x8000 else (int(parts[13]) - 0x10000) * 0.0625):.4f}"
             }
         except Exception as e:
             print(f"Data parse error: {e}")
 
     elif(data.startswith(b'R:')):
-        if len(data) > 10:
-            try:
-                data = data[2:]
-                parts = data.split(",")
-                msg = {
-                    "ID": int(parts[0]),
-                    "Firmware Version": float(f"{int(parts[1]) >> 8}.{int(parts[1]) & 0xFF}"),
-                    "Uptime": datetime(year=int(parts[2]), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
-                    "Vbatt": int(parts[8]) * 0.001,
-                    "Sampling Freq": int(parts[9]),
-                    "Buffering Secs": int(parts[10]),
-                    "V1": int(parts[11]) * 0.008,
-                    "V2": int(parts[12]) * 0.008,
-                    "V3": int(parts[13]) * 0.008,
-                    "I1": (((int(parts[14]) >> 3) if int(parts[14]) < 0x8000 else (int(parts[14]) - 0x10000) >> 3) * 0.00004 / 0.08),
-                    "I2": (((int(parts[15]) >> 3) if int(parts[15]) < 0x8000 else (int(parts[15]) - 0x10000) >> 3) * 0.00004 / 0.08),
-                    "I3": (((int(parts[16]) >> 3) if int(parts[16]) < 0x8000 else (int(parts[16]) - 0x10000) >> 3) * 0.00004 / 0.08),
-                    "Temp": (int(parts[17]) * 0.0625 if int(parts[17]) < 0x8000 else (int(parts[17]) - 0x10000) * 0.0625)
-                }
-            except Exception as e:
-                print(f"Info parse error: {e}")
-        else:
-            data = data[2:]
-            msg = data
-            print(f"Received Reply: {data}")
+        try:
+            data_str = data[2:].decode('utf-8').strip()  
+            parts = data_str.split(",")
+            
+            # Check if this looks like a full info response (many comma-separated values)
+            if len(parts) >= 17:
+                try:
+                    msg = {
+                        "ID": int(parts[0]),
+                        "Firmware Version": round(float("{}.{}".format(int(parts[1]) >> 8, int(parts[1]) & 0xFF)), 4),
+                        "Uptime": datetime(year=int(parts[2]), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
+                        "Vbatt [V]": f"{int(parts[8]) * 0.001:.4f}",
+                        "Sampling Freq [Hz]": int(parts[9]),
+                        "Buffering [s]": int(parts[10]),
+                        "V1 [V]":f"{int(parts[11]) * 0.001:.4f}",
+                        "V2 [V]": f"{int(parts[12]) * 0.001:.4f}",
+                        "V3 [V]": f"{int(parts[13]) * 0.001:.4f}",
+                        "I1 [A]": f"{((((int(parts[14]) >> 3) if int(parts[14]) < 0x8000 else (int(parts[14]) - 0x10000) >> 3) * 0.00004 / 0.08)):.4f}",
+                        "I2 [A]": f"{((((int(parts[15]) >> 3) if int(parts[15]) < 0x8000 else (int(parts[15]) - 0x10000) >> 3) * 0.00004 / 0.08)):.4f}",
+                        "I3 [A]": f"{((((int(parts[16]) >> 3) if int(parts[16]) < 0x8000 else (int(parts[16]) - 0x10000) >> 3) * 0.00004 / 0.08)):.4f}",
+                        "Temp [°C]": f"{(int(parts[17]) * 0.0625 if int(parts[17]) < 0x8000 else (int(parts[17]) - 0x10000) * 0.0625):.4f}"
+                    }
+                except Exception as e:
+                    print("Info parse error: {}".format(e))
+                    # Fall back to simple string response
+                    msg = data_str
+                    print("Received Reply: {}".format(data_str))
+            else:
+                # Simple response (like ping response)
+                msg = data_str
+                print("Received Reply: {}".format(data_str))
+        except Exception as e:
+            print("Response decode error: {}".format(e))
+            msg = str(data)
     else:
         print(f"Received Measure: {data}")
 
@@ -554,10 +608,11 @@ def rx_handler(data):
     return msg
 
 
+
 rx_cbk_queue = queue.Queue()
 
 if __name__ == "__main__":
-    server = eLinkTCPServer(port=9000, handler=rx_handler)
+    server = eLinkTCPServer(handler=rx_handler)
     server.start()
     try:
         while True:

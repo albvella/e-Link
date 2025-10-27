@@ -13,7 +13,6 @@ class eLink_Decompress_Measure:
 
         self.pressure_data = []
         self.flow_data = []
-        self.flow_valid_counts = []
         self.ax_data = []
         self.ay_data = []
         self.az_data = []
@@ -22,7 +21,7 @@ class eLink_Decompress_Measure:
         block_count = 0
         
         while offset < len(data) - 6:
-            # ✅ CERCA IL PROSSIMO HEADER VALIDO (come prima)
+            # ✅ CERCA IL PROSSIMO HEADER VALIDO
             found_header = False
             search_start = offset
             
@@ -33,8 +32,8 @@ class eLink_Decompress_Measure:
                 flow_size = struct.unpack_from('<H', metadata, 2)[0]
                 accel_size = struct.unpack_from('<H', metadata, 4)[0]
                 
-                # ✅ HEADER VALIDO CON NUOVE DIMENSIONI
-                if (pressure_size == 102 and  # Era 101, ora 102!
+                # ✅ HEADER VALIDO TROVATO
+                if (pressure_size == 101 and 
                     0 < flow_size < 50 and 
                     0 < accel_size < 500):
                     
@@ -49,19 +48,18 @@ class eLink_Decompress_Measure:
                 print(f"❌ No valid header found starting from offset {search_start}")
                 break
             
-            # Leggi metadata confermato
+            # Leggi metadata
             metadata = data[offset:offset+6]
             pressure_size = struct.unpack_from('<H', metadata, 0)[0]
             flow_size = struct.unpack_from('<H', metadata, 2)[0]
             accel_size = struct.unpack_from('<H', metadata, 4)[0]
             
             # Calcola dimensione blocco
-            expected_data_size = 6 + pressure_size + flow_size + accel_size  # Dovrebbe essere 518
+            expected_data_size = 6 + pressure_size + flow_size + accel_size
             
             # Verifica che ci siano abbastanza dati
             if offset + expected_data_size > len(data):
                 print(f"Not enough data for block at offset {offset}")
-                print(f"Expected size: {expected_data_size}, available: {len(data) - offset}")
                 break
             
             # Leggi blocco
@@ -82,12 +80,11 @@ class eLink_Decompress_Measure:
             # Decomprimi
             try:
                 pressure = self._adpcm_decompress(pressure_bytes, 12)
-                flow, valid_count = self._rle_decompress_flow(flow_bytes)
+                flow = self._rle_decompress_flow(flow_bytes)
                 ax, ay, az = self._adpcm_decompress_accel(accel_bytes)
                 
                 self.pressure_data.extend(pressure)
                 self.flow_data.extend(flow)
-                self.flow_valid_counts.append(valid_count)
                 self.ax_data.extend(ax)
                 self.ay_data.extend(ay)
                 self.az_data.extend(az)
@@ -103,78 +100,69 @@ class eLink_Decompress_Measure:
         print(f"\n✅ Successfully processed {block_count} blocks")
         print(f"Total samples: pressure={len(self.pressure_data)}, flow={len(self.flow_data)}, accel={len(self.ax_data)}")
 
-    def _rle_decompress_flow(self, comp_bytes: bytes) -> tuple[List[int], int]:
-        """
-        Decompressione RLE per dati di flusso (uint32_t).
-        
-        Returns:
-            tuple: (lista_valori_decompressi, numero_campioni_validi)
-        """
-        out = []
-        idx = 0
-        valid_samples_count = 0
-        
-        # ✅ STEP 1: Decodifica tutti i blocchi RLE
-        temp_values = []
-        while idx + 5 <= len(comp_bytes):
-            value = struct.unpack_from('<I', comp_bytes, idx)[0]
-            run_len = comp_bytes[idx+4]
-            temp_values.append((value, run_len))
-            idx += 5
-        
-        # ✅ STEP 2: Controlla se ci sono dati validi (non-zero)
-        has_valid_data = any(value != 0 for value, _ in temp_values)
-        
-        if not has_valid_data:
-            # ✅ SE TUTTI ZERO: ritorna UN SOLO campione a zero
-            return [0], 1  # ✅ CAMBIATO: 1 campione (lo zero)
-        
-        # ✅ STEP 3: Processa solo fino al primo blocco con valore zero
-        for value, run_len in temp_values:
-            if value == 0:
-                # ✅ STOP al primo zero - il resto è padding
-                break
-            out.extend([value] * run_len)
-            valid_samples_count += run_len
-        
-        # ✅ STEP 4: Se per qualche motivo non abbiamo dati, un solo zero
-        if not out:
-            out = [0]
-            valid_samples_count = 1  # ✅ CAMBIATO: 1 campione (lo zero)
-            
-        return out, valid_samples_count
+    def _rle_decompress_flow(self, comp_bytes: bytes) -> List[int]:
+            # Decompressione RLE per dati di flusso (uint32_t)
+            out = []
+            idx = 0
+            while idx + 5 <= len(comp_bytes):
+                value = struct.unpack_from('<I', comp_bytes, idx)[0]
+                run_len = comp_bytes[idx+4]
+                out.extend([value] * run_len)
+                idx += 5
+            return out
 
     def _adpcm_decompress(self, comp_bytes: bytes, bits: int) -> List[int]:
-        # Decompressione ADPCM generica
+        if len(comp_bytes) < 2:
+            return []
+            
+        print(f"\n=== ADPCM DEBUG (bits={bits}) ===")
+        print(f"Input bytes: {len(comp_bytes)}")
+        print(f"First 10 bytes: {comp_bytes[:10].hex()}")
+        print(f"Last 10 bytes: {comp_bytes[-10:].hex()}")
+        
         if bits == 12:
             step_size_table = self._step_size_table_12bit()
-            target_samples = 200  # ✅ SEMPRE 200 CAMPIONI PER PRESSIONE
         else:
             step_size_table = self._step_size_table_16bit()
-            target_samples = None  # Per accelerometro, processa tutto
-            
         index_adjustment_table = [-1, -1, -1, -1, 2, 4, 6, 8]
         out = []
-        idx = 0
         step_index = 0
         
-        # Valore iniziale - gestione corretta signed/unsigned
+        # Valore iniziale (primi 2 bytes)
         if bits == 12:
-            # 12-bit: unsigned (0-4095)
             prev = struct.unpack_from('<H', comp_bytes, 0)[0]
         else:
-            # 16-bit: signed (-32768 to +32767)
             prev = struct.unpack_from('<h', comp_bytes, 0)[0]
             
         out.append(prev)
-        idx = 2
+        print(f"Initial value: {prev}")
         
-        while idx < len(comp_bytes):
+        # ✅ CALCOLO CORRETTO BASATO SUL FIRMWARE
+        # Se PRESS_HALF_SAMPLES = 200:
+        # - Campione 0: non compresso (già aggiunto)  
+        # - Campioni 1-199: 199 campioni compressi
+        # - 199 nibbles → ceil(199/2) = 100 bytes (ultimo byte ha solo nibble basso)
+        
+        compressed_data_bytes = len(comp_bytes) - 2  # 99 o 100 bytes
+        expected_compressed_samples = 199  # Sempre 199 campioni compressi
+        expected_total_samples = 200       # 1 iniziale + 199 compressi
+        
+        print(f"Compressed data bytes: {compressed_data_bytes}")
+        print(f"Expected compressed samples: {expected_compressed_samples}")
+        print(f"Expected total samples: {expected_total_samples}")
+        
+        # ✅ PROCESSA I NIBBLES CON GESTIONE DELL'ULTIMO BYTE DISPARI
+        processed_samples = 0
+        nibble_count = 0  # Conta i nibbles processati
+        
+        for idx in range(2, len(comp_bytes)):
             byte = comp_bytes[idx]
             
-            # ✅ GESTIONE SPECIALE PER L'ULTIMO BYTE DELLA PRESSIONE
-            if bits == 12 and len(out) == target_samples - 1:
-                # Ultimo campione: elabora solo il primo nibble
+            if idx < 7 or idx >= len(comp_bytes) - 5:
+                print(f"Processing byte {idx}: 0x{byte:02x}")
+            
+            # ✅ PRIMO NIBBLE (bits 0-3) - SEMPRE PRESENTE
+            if processed_samples < expected_compressed_samples:
                 nibble = byte & 0xF
                 sign = nibble & 8
                 delta = nibble & 7
@@ -183,17 +171,34 @@ class eLink_Decompress_Measure:
                 if sign:
                     diff = -diff
                 prev = prev + diff
-                prev = max(0, min(4095, prev))
+                
+                if bits == 12:
+                    prev = max(0, min(4095, prev))
+                else:
+                    prev = max(-32768, min(32767, prev))
+                
                 out.append(prev)
-                break  # ✅ STOP! Abbiamo raggiunto i 200 campioni
-            
-            # ✅ ELABORAZIONE NORMALE: 2 nibbles per byte
-            for shift in [0, 4]:
-                # ✅ CONTROLLO CAMPIONI TARGET PER PRESSIONE
-                if bits == 12 and target_samples and len(out) >= target_samples:
+                processed_samples += 1
+                nibble_count += 1
+                step_index += index_adjustment_table[delta]
+                step_index = max(0, min(87, step_index))
+                
+                if processed_samples >= expected_compressed_samples:
+                    print(f"Reached target samples after nibble {nibble_count}")
                     break
-                    
-                nibble = (byte >> shift) & 0xF
+            
+            # ✅ SECONDO NIBBLE (bits 4-7) - SOLO SE NON È L'ULTIMO BYTE DISPARI
+            if processed_samples < expected_compressed_samples:
+                # ✅ CONTROLLA SE QUESTO È L'ULTIMO BYTE E SE È DISPARI
+                is_last_byte = (idx == len(comp_bytes) - 1)
+                remaining_samples = expected_compressed_samples - processed_samples
+                
+                if is_last_byte and remaining_samples == 1:
+                    # Ultimo byte con solo nibble basso utilizzato
+                    print(f"Skipping high nibble of last byte {idx} (only low nibble used)")
+                    break
+                
+                nibble = (byte >> 4) & 0xF
                 sign = nibble & 8
                 delta = nibble & 7
                 step = step_size_table[step_index]
@@ -202,23 +207,36 @@ class eLink_Decompress_Measure:
                     diff = -diff
                 prev = prev + diff
                 
-                # CLAMP DINAMICO BASATO SUI BITS
                 if bits == 12:
-                    # Dati 12-bit ADC: unsigned 0-4095
                     prev = max(0, min(4095, prev))
                 else:
-                    # Dati 16-bit accelerometro: signed -32768 to +32767
                     prev = max(-32768, min(32767, prev))
                 
                 out.append(prev)
+                processed_samples += 1
+                nibble_count += 1
                 step_index += index_adjustment_table[delta]
                 step_index = max(0, min(87, step_index))
-            
-            # ✅ CONTROLLO CAMPIONI TARGET PER PRESSIONE
-            if bits == 12 and target_samples and len(out) >= target_samples:
-                break
                 
-            idx += 1
+                if processed_samples >= expected_compressed_samples:
+                    print(f"Reached target samples after nibble {nibble_count}")
+                    break
+        
+        print(f"Processed compressed samples: {processed_samples}")
+        print(f"Total nibbles processed: {nibble_count}")
+        print(f"Output samples: {len(out)}")
+        print(f"First 10 values: {out[:10]}")
+        print(f"Last 10 values: {out[-10:]}")
+        
+        if len(out) == expected_total_samples:
+            print(f"✅ PERFECT! Got expected {len(out)} samples")
+        else:
+            print(f"⚠️  Expected {expected_total_samples}, got {len(out)}")
+            
+            # ✅ Se manca 1 campione, probabilmente è l'ultimo nibble
+            while len(out) < expected_total_samples:
+                out.append(prev)  # Duplica l'ultimo valore
+                print(f"Added missing sample: {prev}")
         
         return out
 
@@ -310,69 +328,95 @@ class eLink_Decompress_Measure:
 
 
 if __name__ == "__main__":
-    compressed_filename = 'C:/Users/albve/STM32CubeIDE/workspace_1.6.1/Smart_Joint/Python/251024_1616_comp.bin'
-    decompressor = eLink_Decompress_Measure(compressed_filename)
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    f = 800
-    block_duration = 200 / f  
-    press_fullscale = 50  
-    t = np.linspace(0, len(decompressor.ax_data) / f, len(decompressor.ax_data))
+    compressed_filename = 'C:/Users/albve/STM32CubeIDE/workspace_1.6.1/Smart_Joint/Python/251024_1333_comp.bin'
     
-    t_flow = []
-    
-    for block_idx, valid_count in enumerate(decompressor.flow_valid_counts):
-        if valid_count > 0:  # ✅ ORA include anche i blocchi con un solo zero (valid_count=1)
-            block_start_time = block_idx * block_duration
-            block_end_time = (block_idx + 1) * block_duration
+    # ✅ DEBUG: Limita ai primi 3 blocchi per vedere l'output chiaramente
+    class DebugDecompressor(eLink_Decompress_Measure):
+        def _decompress_file(self):
+            # Copia il codice originale ma aggiungi limite
+            with open(self.bin_path, 'rb') as f:
+                data = f.read()
+
+            self.pressure_data = []
+            self.flow_data = []
+            self.ax_data = []
+            self.ay_data = []
+            self.az_data = []
             
-            # Distribuisci i campioni uniformemente nel blocco
-            block_times = np.linspace(block_start_time, block_end_time, valid_count, endpoint=False)
-            t_flow.extend(block_times)
+            offset = 0
+            block_count = 0
+            max_blocks = 3  # ✅ DEBUG: Solo primi 3 blocchi
+            
+            while offset < len(data) - 6 and block_count < max_blocks:
+                # ... resto del codice uguale ...
+                found_header = False
+                search_start = offset
+                
+                for test_offset in range(search_start, min(search_start + 10, len(data) - 6)):
+                    metadata = data[test_offset:test_offset+6]
+                    pressure_size = struct.unpack_from('<H', metadata, 0)[0]
+                    flow_size = struct.unpack_from('<H', metadata, 2)[0]
+                    accel_size = struct.unpack_from('<H', metadata, 4)[0]
+                    
+                    if (pressure_size == 101 and 
+                        0 < flow_size < 50 and 
+                        0 < accel_size < 500):
+                        
+                        if test_offset != search_start:
+                            print(f"🔧 Adjusted offset from {search_start} to {test_offset}")
+                        
+                        offset = test_offset
+                        found_header = True
+                        break
+                
+                if not found_header:
+                    break
+                
+                metadata = data[offset:offset+6]
+                pressure_size = struct.unpack_from('<H', metadata, 0)[0]
+                flow_size = struct.unpack_from('<H', metadata, 2)[0]
+                accel_size = struct.unpack_from('<H', metadata, 4)[0]
+                expected_data_size = 6 + pressure_size + flow_size + accel_size
+                
+                if offset + expected_data_size > len(data):
+                    break
+                
+                block_data = data[offset:offset + expected_data_size]
+                print(f"\n📦 BLOCK {block_count}: offset={offset}, pressure_size={pressure_size}")
+                
+                data_start = 6
+                pressure_bytes = block_data[data_start:data_start + pressure_size]
+                data_start += pressure_size
+                
+                flow_bytes = block_data[data_start:data_start + flow_size]
+                data_start += flow_size
+                
+                accel_bytes = block_data[data_start:data_start + accel_size]
+                
+                try:
+                    pressure = self._adpcm_decompress(pressure_bytes, 12)
+                    print(f"✅ Block {block_count} pressure decompressed: {len(pressure)} samples")
+                    
+                    flow = self._rle_decompress_flow(flow_bytes)
+                    ax, ay, az = self._adpcm_decompress_accel(accel_bytes)
+                    
+                    self.pressure_data.extend(pressure)
+                    self.flow_data.extend(flow)
+                    self.ax_data.extend(ax)
+                    self.ay_data.extend(ay)
+                    self.az_data.extend(az)
+                    
+                except Exception as e:
+                    print(f"❌ Decompression error in block {block_count}: {e}")
+                    break
+                
+                offset += expected_data_size
+                block_count += 1
+            
+            print(f"\n=== SUMMARY ===")
+            print(f"Processed blocks: {block_count}")
+            print(f"Total pressure samples: {len(self.pressure_data)}")
+            print(f"Expected pressure samples: {block_count * 200}")
+            print(f"Samples per block: {len(self.pressure_data) / block_count if block_count > 0 else 0}")
     
-    t_flow = np.array(t_flow)
-
-    ax = np.array(decompressor.ax_data) * 0.061 
-    ay = np.array(decompressor.ay_data) * 0.061
-    az = np.array(decompressor.az_data) * 0.061
-
-    pressure = np.array(decompressor.pressure_data) * press_fullscale / 4096
-    
-    clock_freq = 80000000
-    flow_data = np.array(decompressor.flow_data)
-    with np.errstate(divide='ignore', invalid='ignore'):
-        flow = np.where(flow_data != 0, clock_freq / flow_data, 0)
-
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10))
-    
-    # ✅ SUBPLOT 1: PRESSIONE
-    ax1.plot(t, pressure, 'b-', linewidth=1)
-    ax1.set_title('Pressione', fontsize=14, fontweight='bold')
-    ax1.set_ylabel('Pressione [bar]', fontsize=12)
-    ax1.grid(True, alpha=0.3)
-    ax1.set_xlim(0, max(t) if len(t) > 0 else 1)
-
-    # ✅ SUBPLOT 2: FLUSSO
-    ax2.plot(t_flow, flow, 'g-', linewidth=1)
-    ax2.set_title('Flusso', fontsize=14, fontweight='bold')
-    ax2.set_ylabel('Flusso [L/s]', fontsize=12)
-    ax2.grid(True, alpha=0.3)
-    ax2.set_xlim(0, max(t_flow) if len(t_flow) > 0 else 1)
-    
-    # ✅ SUBPLOT 3: ACCELERAZIONI
-    ax3.plot(t, ax, 'r-', label='Ax', linewidth=1)
-    ax3.plot(t, ay, 'g-', label='Ay', linewidth=1)
-    ax3.plot(t, az, 'b-', label='Az', linewidth=1)
-    ax3.set_title('Accelerazioni', fontsize=14, fontweight='bold')
-    ax3.set_xlabel('Tempo [s]', fontsize=12)
-    ax3.set_ylabel('Accelerazione [mg]', fontsize=12)
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    ax3.set_xlim(0, max(t) if len(t) > 0 else 1)
-    
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=0.3) 
-    
-    plt.show()
+    decompressor = DebugDecompressor(compressed_filename)

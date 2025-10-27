@@ -56,7 +56,6 @@ typedef struct{
 } Acceleration_Data_TypeDef;
 
 typedef struct {
-	uint8_t Data_Request : 1;
 	uint8_t Measure_Request : 1;
 	uint8_t Start_OTA : 1;
 	uint8_t Ping : 1;
@@ -118,11 +117,14 @@ typedef struct {
     uint8_t Active_RAM_Buffer;
     uint32_t Current_RAM_Base;
     uint32_t Current_RAM_Len;
-    uint32_t RAM_Buffer_Base_tosend;
+    uint32_t Current_RAM_Address;
+    uint32_t Inactive_RAM_Base;
     uint32_t Inactive_RAM_Len;
+    uint32_t Inactive_RAM_Address;
     uint32_t SIM_Prompt_Status;
     uint32_t SIM_Connection_Status;
     uint32_t Log_Status;
+	uint8_t Log_Request : 1;
     TCP_Typedef TCP;
 } System_Resources_Typedef;
 
@@ -173,6 +175,7 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define USR_BTN_Pin GPIO_PIN_13
 #define USR_BTN_GPIO_Port GPIOC
+#define USR_BTN_EXTI_IRQn EXTI15_10_IRQn
 #define DBG_Pin GPIO_PIN_3
 #define DBG_GPIO_Port GPIOC
 #define LTE_STATUS_Pin GPIO_PIN_3

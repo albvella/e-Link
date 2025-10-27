@@ -9,6 +9,7 @@
 #include "main.h"
 #include "global_variables.h"
 #include "peripherals.h"
+#include "string.h"
 
 /* ------CALLBACK TIMER FLUSSO------*/
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim)
@@ -65,7 +66,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
 	if(huart == SIM_UART)
 	{
-		if(*(uint8_t*)sim_rx_buffer == '>')
+		if(*(uint32_t*)sim_rx_buffer == PROMPT)
 		{
 			if(flags.Log_TransferInProgress)
 			{
@@ -79,8 +80,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 			}
 		}
 
-		else if(*(uint32_t*)sim_rx_buffer == 0x444E4553 &&              // "SEND"
-				   *(uint32_t*)(sim_rx_buffer + 4) == 0x004B204F)       // " OK\0"
+		else if(*(uint32_t*)sim_rx_buffer == SENDOK_H &&
+				   *(uint32_t*)(sim_rx_buffer + 4) == SENDOK_L)
 		{
 			if(flags.Log_TransferInProgress)
 			{
@@ -92,15 +93,20 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 			}
 		}
 
-		else if(*(uint32_t*)sim_rx_buffer == 0x4552524F)                 //"ERRO"
+		else if(*(uint32_t*)sim_rx_buffer == ERROR)
 		{
 			flags.Log_ReadytoSend = 0;
 			sys.SIM_Prompt_Status = 0;
 		}
 
-		else if(*(uint32_t*)sim_rx_buffer == 0x444D432B)                 // "+CMD"
+		else if(*(uint32_t*)sim_rx_buffer == COMMAND)
 		{     
 			flags.Message_Rx = 1;
+		}
+
+		else if(strstr(sim_rx_buffer, "CLOSED") != NULL)
+		{
+			HAL_NVIC_SystemReset();
 		}
 
 

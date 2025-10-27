@@ -13,6 +13,7 @@
 void SIM_Power_On(void);
 void SIM_Power_Off(void);
 void SIM_Reset(void);
+void SIM_Startup_Seq(void);
 int SIM_Init(void);
 void SIM_Send_Command(char* command);
 void SIM_Send_Command_DMA(char* command);
@@ -27,6 +28,7 @@ void SIM_publish_MQTT_Message_DMA(const char* topic, const char* message);
 void SIM_publish_MQTT_Message(const char* topic, const char* message);
 void SIM_Send_TCP(char* data);
 void SIM_Send_TCP_Chunk_DMA(uint16_t size);
+void SIM_Send_TCP_Chunk(uint16_t size);
 void SIM_Send_Infos(void);
 int SIM_Wait_Response(const char* expected);
 void SIM_Check_Connection(void);
