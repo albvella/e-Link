@@ -18,21 +18,13 @@ void Temp_Sensor_Init(void)
 	uint8_t data = 0xF0;
 
 	LL_USART_SetBaudRate(huart4.Instance, HAL_RCC_GetPCLK1Freq(), UART_OVERSAMPLING_16, 9600);
-//	UART4->CR1 &= ~(USART_CR1_UE);  // Disabilita UART
-//	UART4->BRR = 9600;       // Imposta nuovo baud rate
-//	UART4->CR1 |= USART_CR1_UE;      // Riabilita UART
-
 	HAL_UART_Transmit(TEMP_UART, &data, 1, 100);  // low for 500+us
-	if (HAL_UART_Receive(TEMP_UART, &data, 1, 1000) != HAL_OK)
-		while(1);
+
+	if (HAL_UART_Receive(TEMP_UART, &data, 1, 1000) != HAL_OK) while(1);
 
 	LL_USART_SetBaudRate(huart4.Instance, HAL_RCC_GetPCLK1Freq(), UART_OVERSAMPLING_16, 115200);
-//	UART4->CR1 &= ~(USART_CR1_UE);  // Disabilita UART
-//	UART4->BRR = 115200;       // Imposta nuovo baud rate
-//	UART4->CR1 |= USART_CR1_UE;      // Riabilita UART
 
-	if (data == 0xF0)
-		while(1);
+	if (data == 0xF0) while(1);
 }
 
 /*------SCRITTURA SU SENSORE DI TEMPERATURA------*/

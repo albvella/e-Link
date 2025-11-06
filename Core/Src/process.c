@@ -383,7 +383,7 @@ uint32_t Send_Measure_Chunk(uint32_t buffer_base, uint32_t buffer_len, uint32_t 
     {
         size_t b64_len = Base64_Encode(raw_buffer, raw_fill, (char*)tcp_chunk, sizeof(tcp_chunk));
         SIM_Send_TCP_Chunk(b64_len);
-        return address;  // Prossimo indirizzo
+        return (address - buffer_base);  // Prossimo indirizzo
     }
 
     // Nessun dato processato
@@ -409,7 +409,7 @@ Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uin
 	press_state.previous_value = adc[0];
 	for (int i = 1; i < PRESS_HALF_SAMPLES; i++) 
 	{
-		uint8_t nibble = ADPCM_Compression(adc[i], &press_state, step_size_table_12bit);
+		uint8_t nibble = ADPCM_Compression(adc[i], &press_state, step_size_table_12bit, index_adjustment_table_press);
 		if (i % 2 != 0) 
 		{
 			packed_byte = nibble;
@@ -478,9 +478,9 @@ Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uin
 		uint16_t x = accel[i*7+1] | (accel[i*7+2] << 8);
 		uint16_t y = accel[i*7+3] | (accel[i*7+4] << 8);
 		uint16_t z = accel[i*7+5] | (accel[i*7+6] << 8);
-		uint8_t nibble_x = ADPCM_Compression(x, &acc_x_state, step_size_table_16bit);
-		uint8_t nibble_y = ADPCM_Compression(y, &acc_y_state, step_size_table_16bit);
-		uint8_t nibble_z = ADPCM_Compression(z, &acc_z_state, step_size_table_16bit);
+		uint8_t nibble_x = ADPCM_Compression(x, &acc_x_state, step_size_table_16bit, index_adjustment_table_acc);
+		uint8_t nibble_y = ADPCM_Compression(y, &acc_y_state, step_size_table_16bit, index_adjustment_table_acc);
+		uint8_t nibble_z = ADPCM_Compression(z, &acc_z_state, step_size_table_16bit, index_adjustment_table_acc);
 		output[out_idx++] = nibble_x | (nibble_y << 4);
 		output[out_idx++] = nibble_z;
 	}
@@ -490,27 +490,28 @@ Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uin
 }
 
 /*-----FUNZIONE DI COMPRESSIONE ADPCM-----*/
-uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, const uint16_t* step_size_table) 
+uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, const uint16_t* step_size_table, const int8_t* index_adjustment_table) 
 {
     int32_t diff = (int32_t)sample - state->previous_value;
     uint16_t step = step_size_table[state->step_index];
     uint8_t nibble = 0;
 
     if (diff < 0) 
-	{
+    {
         nibble = 8; // Bit di segno
         diff = -diff;
     }
 
-	if (step == 0) step = 1;
+    if (step == 0) step = 1;
+    
     // Calcola il nibble quantizzato
     uint32_t temp = (uint32_t)diff * 4;
     if (temp < step) 
-	{
+    {
         nibble |= 0;
     } 
-	else 
-	{
+    else 
+    {
         nibble |= (uint8_t)((temp / step > 7) ? 7 : (temp / step));
     }
 
@@ -536,7 +537,6 @@ uint8_t ADPCM_Compression(int16_t sample, AdpcmState_Typedef* state, const uint1
         if (state->previous_value < -32768) state->previous_value = -32768;
     }
 
-    // Aggiorna l'indice dello step
     state->step_index += index_adjustment_table[nibble & 7];
     if (state->step_index < 0) state->step_index = 0;
     if (state->step_index > 87) state->step_index = 87;

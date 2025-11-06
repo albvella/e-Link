@@ -309,7 +309,7 @@ class eLink_Decompress_Measure:
 
 
 if __name__ == "__main__":
-    compressed_filename = 'C:/Users/albve/STM32CubeIDE/workspace_1.6.1/Smart_Joint/Python/251027_1158_comp.bin'
+    compressed_filename = 'C:/Users/albve/STM32CubeIDE/workspace_1.6.1/Smart_Joint/Python/251027_1129_comp.bin'
     decompressor = eLink_Decompress_Measure(compressed_filename)
 
     import matplotlib.pyplot as plt
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     t_flow = []
     
     for block_idx, valid_count in enumerate(decompressor.flow_valid_counts):
-        if valid_count > 0: 
+        if valid_count > 0:  # ✅ ORA include anche i blocchi con un solo zero (valid_count=1)
             block_start_time = block_idx * block_duration
             block_end_time = (block_idx + 1) * block_duration
             
@@ -346,18 +346,21 @@ if __name__ == "__main__":
 
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10))
     
+    # ✅ SUBPLOT 1: PRESSIONE
     ax1.plot(t, pressure, 'b-', linewidth=1)
     ax1.set_title('Pressione', fontsize=14, fontweight='bold')
     ax1.set_ylabel('Pressione [bar]', fontsize=12)
     ax1.grid(True, alpha=0.3)
     ax1.set_xlim(0, max(t) if len(t) > 0 else 1)
 
+    # ✅ SUBPLOT 2: FLUSSO
     ax2.plot(t_flow, flow, 'g-', linewidth=1)
     ax2.set_title('Flusso', fontsize=14, fontweight='bold')
     ax2.set_ylabel('Flusso [L/s]', fontsize=12)
     ax2.grid(True, alpha=0.3)
     ax2.set_xlim(0, max(t_flow) if len(t_flow) > 0 else 1)
     
+    # ✅ SUBPLOT 3: ACCELERAZIONI
     ax3.plot(t, ax, 'r-', label='Ax', linewidth=1)
     ax3.plot(t, ay, 'g-', label='Ay', linewidth=1)
     ax3.plot(t, az, 'b-', label='Az', linewidth=1)

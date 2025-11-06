@@ -5,6 +5,7 @@ import base64
 from datetime import datetime
 import queue
 import time
+import pytz
 
 class eLinkTCPServer:
     """
@@ -122,7 +123,8 @@ class eLinkTCPServer:
             threading.Thread: Thread worker che gestisce la ricezione.
         """
         if filename is None:
-            filename = datetime.now().strftime("%y%m%d_%H%M_comp.bin")
+            italy_tz = pytz.timezone('Europe/Rome')
+            filename = datetime.now(italy_tz).strftime("%y%m%d_%H%M_comp.bin")
 
         def worker():
             with open(filename, "ab") as f:
@@ -191,41 +193,59 @@ class eLinkTCPServer:
         return t
 
 
-    def send_OTA(self, client_sock, filename, chunk_size=1024):
+    def send_OTA(self, client_sock, filename, chunk_size=512):
         """
-        Invia un file al client per aggiornamento OTA, con conferma ACK per ogni chunk.
-
-        Args:
-            client_sock (socket.socket): Socket del client.
-            filename (str): Nome del file da inviare.
-            chunk_size (int, optional): Dimensione dei chunk inviati.
-
-        Returns:
-            bytes or None: Risposta finale del client, None in caso di errore.
+        Invia un file al client per aggiornamento OTA, con lunghezza chunk e conferma ACK.
         """
+        original_timeout = client_sock.gettimeout()
+        client_sock.settimeout(20.0)
         try:
             with open(filename, "rb") as f:
+                len_file = f.seek(0, 2) 
+                f.seek(0)  
+                sent = 0
                 while True:
                     bin_chunk = f.read(chunk_size)
                     if not bin_chunk:
                         break
-                    chunk = base64.b64encode(bin_chunk) 
-                    client_sock.sendall(chunk)
+                    
                     try:
-                        ack = self.client_reply_queues[client_sock.getpeername()].get(timeout=5)  # attende l'ACK dal client 
+                        #LUNGHEZZA DEL CHUNK BINARIO
+                        chunk_len = len(bin_chunk)
+                        len_header = f"{chunk_len:04d}".encode()  # 4 cifre: "0512", "0384", etc.
+                        client_sock.sendall(len_header)
+                        
+                        #DATI BASE64
+                        chunk = base64.b64encode(bin_chunk) 
+                        client_sock.sendall(chunk)
+                    except socket.timeout:
+                        print("Socket timeout during OTA send!")
+                        return None
+                        
+                    print(f"Sent chunk: {chunk_len} bytes → {len(chunk)} base64 chars ({sent}/{len_file} total)")
+                    sent += len(bin_chunk)
+                    
+                    try:
+                        ack = self.client_reply_queues[client_sock.getpeername()].get(timeout=20)
                     except queue.Empty:
                         print("ACK timeout!")
                         return None
                     if ack.strip() != b'ACK':
                         print("ACK not received!")
                         return None
+                    time.sleep(1.5)  # ← Aumentato per dare tempo a f_sync() sulla SD
+                    
             client_sock.sendall("EOF".encode())
             reply = self.client_reply_queues[client_sock.getpeername()].get(timeout=5)
             print(f"File {filename} sent to client.")
             return reply
+
         except Exception as e:
             print(f"Error sending file: {e}")
             return None
+
+        finally:
+            client_sock.settimeout(original_timeout)
 
 
     def send_crc32(self, client_sock, filename):
@@ -269,25 +289,31 @@ class eLinkTCPServer:
         Returns:
             None
         """
-        self.send_command(client_sock, "OTA", buffer_size=16)
-        ret = self.client_reply_queues[client_sock.getpeername()].get(timeout=5)
+        if self.client_reply_queues[client_sock.getpeername()]:
+            self.client_reply_queues[client_sock.getpeername()].queue.clear()  # Pulisce eventuali risposte pendenti
+
+        self.send_command(client_sock, "OTA")
+        ret = self.client_reply_queues[client_sock.getpeername()].get(timeout=10)
         if ret is None or ret.decode() != "OTA_READY":
             print("Client not ready for OTA.")
-            return
-        ret = self.send_OTA(client_sock, filename)
-        if ret is None or ret.decode() != "OTA_RECEIVED":
-            print("Client did not confirm OTA receipt.")
-            return
-        ret = self.send_crc32(client_sock, filename)
-        if ret is None or ret.decode() != "OTA_CRC_OK":
-            print("Client reported CRC error.")
-            return
-        ret = self.client_reply_queues[client_sock.getpeername()].get(timeout=5)
-        if ret is not None and ret.decode() == "OTA_SUCCESS":
-            print("OTA completed successfully.")
-        else:
             print(ret)
-            print("OTA failed.")
+            return
+        else:
+            ret = self.send_OTA(client_sock, filename)
+            if ret is None or ret.decode() != "OTA_RECEIVED":
+                print("Client did not confirm OTA receipt.")
+            else:
+                ret = self.send_crc32(client_sock, filename)
+                if ret is None or ret.decode() != "OTA_CRC_OK":
+                    print("Client reported CRC error.")
+                else:
+                    try:
+                        ret = self.client_reply_queues[client_sock.getpeername()].get(timeout=10)
+                    except queue.Empty:
+                        print("OTA completed successfully.")
+                        return
+                    
+        print("OTA failed.")
         return
 
 
@@ -308,24 +334,37 @@ class eLinkTCPServer:
         t.start()
         return t
 
+
+
     def _extract_device_id_from_log(self, data, addr):
-        """
-        Estrae il device_id dai messaggi di log e lo associa all'indirizzo.
-        
-        Args:
-            data (bytes): Dati del messaggio di log.
-            addr (tuple): Indirizzo del client.
-        """
         try:
-            parts = data.decode().split(b",") if isinstance(data, bytes) else data.split(",")
+            parts = data.decode().split(",") if isinstance(data, bytes) else data.split(",")
             if len(parts) > 0:
                 device_id = int(parts[0])
-                if addr not in self.device_clients.values():
+                if device_id in self.device_clients:
+                    old_addr = self.device_clients[device_id]
+                    if old_addr != addr:  # Solo se è un client diverso
+                        old_sock = self.clients.get(old_addr)
+                        print(f"Device ID {device_id} already connected!")
+                        print(f"Replacing old connection {old_addr} with new {addr}")
+                        # Chiudi la vecchia connessione
+                        if old_sock:
+                            try:
+                                old_sock.close()
+                            except:
+                                pass
+                        self._disconnect_client(old_addr)
+                        # Associa il nuovo
+                        self.device_clients[device_id] = addr
+                        print(f"Device ID {device_id} associated with {addr}")
+                        print(f"Connected devices: {list(self.device_clients.keys())}")
+                else:
                     self.device_clients[device_id] = addr
                     print(f"Device ID {device_id} associated with {addr}")
-                    print(f"Device List: {list(self.device_clients.keys())}")
+                    print(f"Connected devices: {list(self.device_clients.keys())}")
+
         except Exception as e:
-            pass  # Non tutti i messaggi di log contengono device_id
+            pass
 
     def _extract_device_id_from_reply(self, data, addr):
         """
@@ -340,10 +379,27 @@ class eLinkTCPServer:
                 parts = data.decode().split(",") if isinstance(data, bytes) else data.split(",")
                 if len(parts) > 0:
                     device_id = int(parts[0])
-                    if addr not in self.device_clients.values():
+                    if device_id in self.device_clients:
+                        old_addr = self.device_clients[device_id]
+                        if old_addr != addr:  # Solo se è un client diverso
+                            old_sock = self.clients.get(old_addr)
+                            print(f"Device ID {device_id} already connected!")
+                            print(f"Replacing old connection {old_addr} with new {addr}")
+                            # Chiudi la vecchia connessione
+                            if old_sock:
+                                try:
+                                    old_sock.close()
+                                except:
+                                    pass
+                            self._disconnect_client(old_addr)
+                            # Associa il nuovo
+                            self.device_clients[device_id] = addr
+                            print(f"Device ID {device_id} associated with {addr}")
+                            print(f"Connected devices: {list(self.device_clients.keys())}")
+                    else:
                         self.device_clients[device_id] = addr
                         print(f"Device ID {device_id} associated with {addr}")
-                        print(f"Device List: {list(self.device_clients.keys())}")
+                        print(f"Connected devices: {list(self.device_clients.keys())}")
         except Exception as e:
             pass  # Non tutte le risposte contengono device_id
 
@@ -577,7 +633,7 @@ def rx_handler(data):
                     msg = {
                         "ID": int(parts[0]),
                         "Firmware Version": round(float("{}.{}".format(int(parts[1]) >> 8, int(parts[1]) & 0xFF)), 4),
-                        "Uptime": datetime(year=int(parts[2]), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
+                        "Uptime": datetime(year=int(parts[2] + 2000), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
                         "Vbatt [V]": f"{int(parts[8]) * 0.001:.4f}",
                         "Sampling Freq [Hz]": int(parts[9]),
                         "Buffering [s]": int(parts[10]),

@@ -116,7 +116,8 @@ extern uint8_t compressed_data[MAX_COMPRESSED_SIZE];
 
 extern const uint16_t step_size_table_16bit[88];
 extern const uint16_t step_size_table_12bit[88];
-extern const int8_t index_adjustment_table[8];
+extern const int8_t index_adjustment_table_press[8];
+extern const int8_t index_adjustment_table_acc[8];
 
 extern const unsigned char base64_table[256];
 extern const char base64_enc_table[64];

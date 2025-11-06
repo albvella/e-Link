@@ -24,15 +24,16 @@ int SIM_Init(void)
 	sprintf(sys.apn, "sensor.net");
 	strcpy(sys.TCP.IP_address, config.tcp_IPaddress);
 	strcpy(sys.TCP.Port, config.tcp_Port);
-//	sprintf(sys.TCP.IP_address, "a");
-//	sprintf(sys.TCP.Port, "a");
 
 	memset(response, 0, sizeof(response));
 
+	uint32_t TIMEOUT_POWERON = 10000;
+	uint32_t start_time = HAL_GetTick();
 	if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET)
 	{
 		SIM_Power_On();
-		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);            //Attesa accensione modulo
+		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET && (HAL_GetTick() - start_time) < TIMEOUT_POWERON);
+		if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET) return -1;
 	}
 
 	SIM_Send_Command("AT\r");                                                                     //Verifica comunicazione
@@ -202,44 +203,6 @@ int SIM_Init(void)
 
 	SIM_Send_Command("AT+CIPSHUT\r");
 	SIM_Receive_Response(response, 65000);
-
-//	sprintf(command, "AT+CNACT=1,\"%s\"\r", sys.apn);                                             //Attivazione contesto PDP
-//	SIM_Send_Command(command);
-//	SIM_Wait_Response("OK");
-//	SIM_Receive_Response(response, 5000);
-//	if(strstr(response, "+APP PDP: ACTIVE") == NULL)
-//	{
-//		uint32_t pdp_start = HAL_GetTick();
-//    	const uint32_t PDP_TIMEOUT = 120000;
-//		while(strstr(response, "+APP PDP: ACTIVE") == NULL && (HAL_GetTick() - pdp_start) < PDP_TIMEOUT)
-//		{
-//			sprintf(command, "AT+CNACT=1,\"%s\"\r", sys.apn);
-//			SIM_Send_Command(command);
-//			SIM_Wait_Response("OK");
-//			SIM_Receive_Response(response, 5000);
-//			HAL_Delay(1000);
-//		}
-//		if(strstr(response, "+APP PDP: ACTIVE") == NULL)
-//		{
-//			SIM_Power_Off();
-//			return -1;
-//		}
-//	}
-//
-//	SIM_Send_Command("AT+CNACT?\r");                                                              //Verifica indirizzo IP
-//	SIM_Receive_Response(response, 5000);
-//	uint32_t ip_start = HAL_GetTick();
-//	const uint32_t IP_TIMEOUT = 120000;
-//	while(!SIM_Check_IP(response) && (HAL_GetTick() - ip_start) < IP_TIMEOUT)
-//	{
-//		SIM_Send_Command("AT+CNACT?\r");
-//		SIM_Receive_Response(response, 5000);
-//		HAL_Delay(1000);
-//	}
-//	if(!SIM_Check_IP(response))
-//	{
-//		return -1;
-//	}
 	
 	TCP:
 	SIM_Send_Command("AT+CIPRXGET=0\r");                                                         //Impostazione ricezione automatica da server TCP
@@ -300,24 +263,6 @@ int SIM_Init(void)
 	{
 		return -1;  
 	}
-
-//	SIM_Send_Command("AT+CIPSTATUS\r");                                                        //Verifica connessione al server TCP
-//	SIM_Wait_Response("OK");
-//	SIM_Receive_Response(response, 5000);
-//	uint32_t status_start = HAL_GetTick();
-//	const uint32_t CIPSTATUS_TIMEOUT = 30000;
-//
-//	while(!SIM_Check_TCP_State(response) && (HAL_GetTick() - status_start) < CIPSTATUS_TIMEOUT)
-//	{
-//		SIM_Send_Command("AT+CIPSTATUS\r");
-//		SIM_Receive_Response(response, 5000);
-//		HAL_Delay(1000);
-//	}
-//
-//	if(!SIM_Check_TCP_State(response))
-//	{
-//		return -1;
-//	}
 
 	return 0;
 }
@@ -388,6 +333,22 @@ void SIM_Send_Command_DMA(char* command)
 	HAL_UART_Transmit_DMA(SIM_UART, (uint8_t*)command, len);
 }
 
+/*-----STOP DMA UART-----*/
+void SIM_DMA_Stop(void)
+{
+	HAL_UART_DMAStop(SIM_UART);
+	__HAL_UART_CLEAR_FLAG(SIM_UART, UART_CLEAR_OREF);
+	__HAL_UART_CLEAR_FLAG(SIM_UART, UART_CLEAR_IDLEF);
+	memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
+}
+
+/*-----RESTART DMA UART-----*/
+void SIM_DMA_Start(void)
+{
+    memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
+    HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t*)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+}
+
 /*------RICEZIONE RISPOSTA DAL MODULO LTE------*/
 uint16_t SIM_Receive_Response(char* rx, uint32_t timeout_ms)
 {
@@ -397,6 +358,21 @@ uint16_t SIM_Receive_Response(char* rx, uint32_t timeout_ms)
 	while ((HAL_GetTick() - start_time) < timeout_ms)
 	{
 		HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t *)rx, 256, &RxLen, 500);
+		if (RxLen > 0)
+			break;
+	}
+	return RxLen;
+}
+
+/*------RICEZIONE DATI OTA------*/
+uint16_t SIM_Receive_OTA(char* rx, uint32_t timeout_ms)
+{
+	uint16_t RxLen = 0;
+	uint32_t start_time = HAL_GetTick();
+
+	while ((HAL_GetTick() - start_time) < timeout_ms)
+	{
+		HAL_UARTEx_ReceiveToIdle(SIM_UART, (uint8_t *)rx, 800, &RxLen, 500);
 		if (RxLen > 0)
 			break;
 	}
@@ -417,19 +393,6 @@ int SIM_Check_IP(const char* response)
 		}
 	}
 	return 0;
-}
-
-/*------CONTROLLO STATO CONNESSIONE MQTT------*/
-int SIM_Check_MQTT_State(const char* response)
-{
-    char* smstate_pos = strstr(response, "+SMSTATE:");
-    if(smstate_pos != NULL) {
-        int mqtt_state;
-        if(sscanf(smstate_pos, "+SMSTATE: %d", &mqtt_state) >= 1) {
-            return (mqtt_state == 1) ? 1 : 0;
-        }
-    }
-    return 0;
 }
 
 /*------CONTROLLO STATO CONNESSIONE TCP------*/
@@ -594,45 +557,6 @@ void SIM_Get_Cfg(char* cmd_start)
 	cfg_idx = atoi(comma2 + 1);
 }
 
-/*------PUBBLICAZIONE MESSAGGIO MQTT IN MODALITA' DMA------*/
-void SIM_publish_MQTT_Message_DMA(const char* topic, const char* message)
-{
-    char command[256];
-    uint16_t len = (uint16_t)strlen(message);
-
-    if(topic != NULL && strlen(topic) > 0)
-	{
-        sprintf(command, "AT+SMPUB=\"%s\",%d,1,0\r", topic, len);
-    } 
-	else 
-	{
-        sprintf(command, "AT+SMPUB=%d\r", len);
-    }
-    
-    SIM_Send_Command_DMA(command);
-}
-
-/*-----PUBBLICAZIONE MESSAGGIO MQTT-----*/
-void SIM_publish_MQTT_Message(const char* topic, const char* message)
-{
-	char command[256];
-	uint16_t len = (uint16_t)strlen(message);
-
-	if(topic != NULL && strlen(topic) > 0)
-	{
-		sprintf(command, "AT+SMPUB=\"%s\",%d,1,0\r", topic, len);
-	} 
-	else 
-	{
-		sprintf(command, "AT+SMPUB=%d\r", len);
-	}
-	
-	SIM_Send_Command(command);
-	SIM_Wait_Response(">");                       
-	HAL_UART_Transmit(SIM_UART, (uint8_t*)message, strlen(message), 1000);
-    SIM_Wait_Response("OK");
-}
-
 /*-----INVIO DATI AL SERVER TCP-----*/
 void SIM_Send_TCP(char* data)
 {
@@ -646,7 +570,7 @@ void SIM_Send_TCP(char* data)
 
     HAL_UART_Transmit(SIM_UART, (uint8_t*)data, size, 1000);
     
-    SIM_Wait_Response("SEND OK");
+    SIM_Wait_Response("OK");
 }
 
 /*-----INVIO DATI AL SERVER TCP CON DMA-----*/
@@ -675,6 +599,8 @@ void SIM_Send_Infos(void)
 	char infos[512];
 	uint16_t new_temp = 0;
 
+	SIM_DMA_Stop();
+
 	BC_MultiRead_Reg(REG3B_VBAT_ADC, &Vbatt);
 	INA3221_Read_Measure(&Supply);
 	if((new_temp = Read_Temperature()) != 0)
@@ -691,7 +617,8 @@ void SIM_Send_Infos(void)
 	SIM_Wait_Response(">");
 	HAL_UART_Transmit(SIM_UART, (uint8_t*)infos, len, 100);
 	SIM_Wait_Response("OK");
-	memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
+	
+	SIM_DMA_Start();
 }
 
 /*-----ATTESA RISPOSTA-----*/
@@ -699,7 +626,7 @@ int SIM_Wait_Response(const char* expected)
 {
     char rx[256];
     memset(rx, 0, sizeof(rx));
-    uint16_t timeout = 2000; // 2 secondi
+    uint16_t timeout = 5000; // 5 secondi
     uint32_t start_time = HAL_GetTick();
 
     while((HAL_GetTick() - start_time) < timeout)
@@ -726,13 +653,11 @@ void SIM_Check_Connection(void)
 	char command[6];
 	char response_sim[256];
 	uint32_t start_time;
-    const uint32_t CEREG_TIMEOUT = 180000;  
-    const uint32_t TCP_TIMEOUT = 120000;     
-    const uint32_t MAX_TCP_ATTEMPTS = 5;    
+    const uint32_t CEREG_TIMEOUT = 30000;
+    const uint32_t TCP_TIMEOUT = 30000;
+    const uint32_t MAX_TCP_ATTEMPTS = 3;
 
-
-    HAL_UART_DMAStop(SIM_UART);
-	memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
+    SIM_DMA_Stop();
 
 	int registered = 0;
 	start_time = HAL_GetTick();
@@ -784,5 +709,5 @@ void SIM_Check_Connection(void)
         HAL_NVIC_SystemReset();
     }
 
-	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
+	SIM_DMA_Start();
 }

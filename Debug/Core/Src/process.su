@@ -7,7 +7,7 @@
 ../Core/Src/process.c:256:6:RAM_Save_Measure	40	static
 ../Core/Src/process.c:319:10:Send_Measure_Chunk	1152	static
 ../Core/Src/process.c:394:26:Compress_Sample	112	static
-../Core/Src/process.c:489:9:ADPCM_Compression	40	static
-../Core/Src/process.c:545:6:Apply_Config	4160	static
-../Core/Src/process.c:668:6:Send_Config	136	static
-../Core/Src/process.c:725:6:Clear_Flags	8	static
+../Core/Src/process.c:493:9:ADPCM_Compression	40	static
+../Core/Src/process.c:549:6:Apply_Config	4160	static
+../Core/Src/process.c:672:6:Send_Config	136	static
+../Core/Src/process.c:729:6:Clear_Flags	8	static

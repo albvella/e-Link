@@ -209,9 +209,9 @@ def connection_monitor(server):
                 if isinstance(ret, dict) and len(ret) > 1:
                     print(f"\n[Device {ret.get('ID', '?')}] Data received:")
                     for k, v in ret.items():
-                        print(f"   {k}: {v}")
+                        print(f"   {k:<15}: {v}")  
                 else:
-                    if not ret.startswith("H:"):
+                    if not ret.startswith("H:") and ret != "ACK":
                         print(f"\n[Response] {ret}")
         except:
             pass
@@ -257,7 +257,7 @@ def rx_handler(data):
                     msg = {
                         "ID": int(parts[0]),
                         "Firmware Version": round(float("{}.{}".format(int(parts[1]) >> 8, int(parts[1]) & 0xFF)), 4),
-                        "Uptime": datetime(year=int(parts[2]), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
+                        "Uptime": datetime(year=int(parts[2] + 2000), month=int(parts[3]), day=int(parts[4]), hour=int(parts[5]), minute=int(parts[6]), second=int(parts[7])),
                         "Vbatt [V]": f"{int(parts[8]) * 0.001:.4f}",
                         "Sampling Freq [Hz]": int(parts[9]),
                         "Buffering [s]": int(parts[10]),

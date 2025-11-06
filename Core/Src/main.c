@@ -138,12 +138,11 @@ char new_cfg_val[10] = {0};
 uint8_t compressed_data[MAX_COMPRESSED_SIZE] = {0}; 
 
 const uint16_t step_size_table_16bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 16 bit
-		7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31,
-		34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143,
-		157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658,
-		724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024,
-		3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
-		15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794
+		16, 17, 19, 20, 21, 23, 25, 27, 29, 31, 33, 36, 39, 42, 45, 48, 52, 56, 60, 65, 69,
+		75, 80, 87, 93, 100, 108, 116, 125, 134, 145, 156, 168, 180, 194, 209, 225, 242, 260,
+		280, 302, 325, 349, 376, 404, 435, 468, 504, 542, 584, 628, 676, 728, 783, 843, 907, 976,
+		1050, 1130, 1216, 1309, 1409, 1516, 1632, 1756, 1890, 2033, 2188, 2355, 2534, 2727, 2935,
+		3159, 3399, 3658, 3937, 4237, 4560, 4907, 5281, 5683, 6116, 6581, 7083, 7622, 8203, 8828, 9500
 };
 const uint16_t step_size_table_12bit[88] = {                                                            //tabella ottimizzata pseudo logaritmica per 12 bit
 		1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4,
@@ -153,7 +152,8 @@ const uint16_t step_size_table_12bit[88] = {                                    
 		404, 442, 483, 528, 577, 630, 688, 751, 819, 893, 974, 1062, 1157, 1261, 1373, 1499,
 		1629, 1682, 1850, 2035, 2238, 2462, 2709, 2979
 };
-const int8_t index_adjustment_table[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
+const int8_t index_adjustment_table_press[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
+const int8_t index_adjustment_table_acc[8] = {0, 0, 1, 1, 2, 2, 3, 3};
 
 const unsigned char base64_table[256] = {
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,  // 0x00-0x0F
@@ -211,7 +211,10 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  __disable_irq();
+  SCB->VTOR = 0x08000000;
+  __DSB();
+  __enable_irq();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -440,8 +443,7 @@ int main(void)
 		case OTA_STATE:
 			if(OTA_Init() == HAL_OK)
 			{
-				HAL_UART_DMAStop(SIM_UART);
-				memset(sim_rx_buffer, 0, sizeof(sim_rx_buffer));
+				SIM_DMA_Stop();
 
 				SIM_Send_TCP("R:OTA_READY");
 				if(OTA_Receive() == HAL_OK)
@@ -454,25 +456,27 @@ int main(void)
 						{
 							SIM_Send_TCP("R:OTA_SUCCESS");
 							HAL_Delay(500);
-							NVIC_SystemReset();
+							HAL_NVIC_SystemReset();
 						}
 						else
 						{
 							SIM_Send_TCP("R:OTA_APPLY_ERROR");
-							HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 							LED_Stop(ORG_LED);
 							LED_Stop(RED_LED);
 							LED_Start(GRN_LED, MEDIUM, HALF);
+							sys.SIM_Connection_Status = HAL_GetTick();
+							SIM_DMA_Start();
 							state = IDLE;
 						}
 					}
 					else
 					{
 						SIM_Send_TCP("R:OTA_CRC_ERROR");
-						HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 						LED_Stop(ORG_LED);
 						LED_Stop(RED_LED);
 						LED_Start(GRN_LED, MEDIUM, HALF);
+						sys.SIM_Connection_Status = HAL_GetTick();
+						SIM_DMA_Start();
 						state = IDLE;
 						break;
 					}
@@ -481,31 +485,33 @@ int main(void)
 				else
 				{
 					SIM_Send_TCP("R:OTA_RECEIVE_ERROR");
-					HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 					LED_Stop(ORG_LED);
 					LED_Stop(RED_LED);
 					LED_Start(GRN_LED, MEDIUM, HALF);
+					sys.SIM_Connection_Status = HAL_GetTick();
+					SIM_DMA_Start();
 					state = IDLE;
 				}
 			}
 			else
 			{
 				SIM_Send_TCP("R:OTA_INIT_ERROR");
-				HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, (uint8_t *)sim_rx_buffer, SIM_RXBUFFER_SIZE);
 				LED_Stop(ORG_LED);
 				LED_Stop(RED_LED);
 				LED_Start(GRN_LED, MEDIUM, HALF);
+				sys.SIM_Connection_Status = HAL_GetTick();
+				SIM_DMA_Start();
 				state = IDLE;
 			}
 			break;
 
 		default:
 			break;
-			}
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		}
+	}
   /* USER CODE END 3 */
 }
 

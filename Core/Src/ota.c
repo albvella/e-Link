@@ -35,59 +35,99 @@ int OTA_Init(void)
 		return -1;
 	}
 
+	sys.OTA_File_isOpen = 1;
 	return 0;
 }
 
 /*-----RICEZIONE FILE OTA-----*/
 int OTA_Receive(void)
 {
-	uint8_t rx_buffer[1500];
-	UINT bytes_written = 0;
-	uint8_t bin_buffer[1500];
-	uint16_t Rx_Len = 0;
+    uint8_t rx_buffer[800];
+    uint8_t len_buffer[5];  
+    UINT bytes_written = 0;
+    uint8_t bin_buffer[512];
+    uint16_t Rx_Len = 0;
+    uint16_t expected_len = 0;
 
-	while (1)
-	{
-		Rx_Len = SIM_Receive_Response((char*)rx_buffer, 5000);
-		if (rx_buffer[0] == '\0' || (rx_buffer[0] == '\r' && rx_buffer[1] == '\n'))
-		{
-			break;
-		}
-		if(strncmp((char*)rx_buffer, "EOF", 3) == 0)
-		{
-			break;
-		}
-		if (Rx_Len == 0)
-		{
-			f_close(&sys.OTA_File);
-			return -1;
-		}
-		size_t base64_len = strlen((char*)rx_buffer);
-		size_t bin_len = Base64_Decode((char*)rx_buffer, bin_buffer, base64_len);
-		f_write(&sys.OTA_File, bin_buffer, bin_len, &bytes_written);
-		if (bytes_written != bin_len)
-		{
-			f_close(&sys.OTA_File);
-			return -1;
-		}
-		SIM_Send_TCP("ACK");
-	}
+    if (!sys.OTA_File_isOpen) 
+    {
+        return -1; 
+    }
 
-	f_close(&sys.OTA_File);
+    while (1)
+    {
+        Rx_Len = SIM_Receive_OTA((char*)len_buffer, 10000);
+        if (Rx_Len == 0)
+        {
+            f_close(&sys.OTA_File);
+            sys.OTA_File_isOpen = 0;
+            return -1;
+        }
+        
+        len_buffer[4] = '\0';
+        
+        if(strncmp((char*)len_buffer, "EOF", 3) == 0)
+        {
+            break;
+        }
+
+        expected_len = atoi((char*)len_buffer);
+        if (expected_len == 0 || expected_len > 512)
+        {
+            f_close(&sys.OTA_File);
+            sys.OTA_File_isOpen = 0;
+            return -1;
+        }
+
+        uint16_t expected_base64_len = ((expected_len + 2) / 3) * 4;
+        uint16_t total_received = 0;
+        memset(rx_buffer, 0, sizeof(rx_buffer));
+        
+        while (total_received < expected_base64_len)
+        {
+            Rx_Len = SIM_Receive_OTA((char*)&rx_buffer[total_received], 10000);
+            
+            if (Rx_Len == 0)
+            {
+                f_close(&sys.OTA_File);
+                sys.OTA_File_isOpen = 0;
+                return -1;
+            }
+            
+            total_received += Rx_Len;
+        }
+        
+        rx_buffer[expected_base64_len] = '\0';  // Termina stringa
+        
+        Base64_Decode((char*)rx_buffer, bin_buffer, sizeof(bin_buffer));
+
+        f_write(&sys.OTA_File, bin_buffer, expected_len, &bytes_written);
+        if (bytes_written != expected_len)
+        {
+            f_close(&sys.OTA_File);
+            sys.OTA_File_isOpen = 0;
+            return -1;
+        }
+        
+        f_sync(&sys.OTA_File);
+        SIM_Send_TCP("R:ACK");
+    }
+
+    f_close(&sys.OTA_File);
     sys.OTA_File_isOpen = 0;
-	return 0;
+    return 0;
 }
 
 int OTA_CRC_Check(void)
 {
 	FRESULT fRes = 0;
 	UINT read = 0;
-	uint16_t ota_crc = 0;
+	uint32_t ota_crc = 0;
 	uint8_t rx_buffer[64];
 	uint32_t calc_crc = 0;
 
 	SIM_Receive_Response((char*)rx_buffer, 5000);
-	uint8_t crc_bin[8];
+	uint8_t crc_bin[4];
 	size_t crc_len = Base64_Decode((char*)rx_buffer, crc_bin, sizeof(crc_bin));
 	if (crc_len == 4)
 	{
@@ -103,12 +143,16 @@ int OTA_CRC_Check(void)
 	{
 		return -1;
 	}
+	sys.OTA_File_isOpen = 1;
 
 	uint32_t size = f_size(&sys.OTA_File);
+
+	__HAL_CRC_DR_RESET(HCRC);
+    HAL_CRCEx_Polynomial_Set(HCRC, 0x04c11db7, CRC_POLYLENGTH_32B);
     HAL_CRCEx_Input_Data_Reverse(HCRC, CRC_INPUTDATA_INVERSION_BYTE);
     HAL_CRCEx_Output_Data_Reverse(HCRC, CRC_OUTPUTDATA_INVERSION_ENABLE);
     HCRC->Instance->INIT = 0xFFFFFFFF;
-    HAL_CRCEx_Polynomial_Set(HCRC, 0x04c11db7, CRC_POLYLENGTH_32B);
+	__HAL_CRC_DR_RESET(HCRC);
 
 	while (size > 0)
 	{
@@ -119,11 +163,15 @@ int OTA_CRC_Check(void)
 			f_close(&sys.OTA_File);
 			return -1;
 		}
-		calc_crc = HAL_CRC_Accumulate(HCRC, (uint32_t *)buffer, read / 4 + (read % 4 != 0));
+		for (UINT i = 0; i < read; i++)
+        {
+            calc_crc = HAL_CRC_Accumulate(HCRC, (uint32_t*)&buffer[i], 1);
+        }
 		size -= read;
 	}
 
 	f_close(&sys.OTA_File);
+	sys.OTA_File_isOpen = 0;
 
 	if (calc_crc != ota_crc)
 	{

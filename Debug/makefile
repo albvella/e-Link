@@ -53,6 +53,9 @@ default.size.stdout \
 OBJDUMP_LIST += \
 Smart_Joint.list \
 
+OBJCOPY_BIN += \
+Smart_Joint.bin \
+
 
 # All Target
 all: main-build
@@ -76,12 +79,17 @@ Smart_Joint.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	@echo 'Finished building: $@'
 	@echo ' '
 
+Smart_Joint.bin: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objcopy  -O binary $(EXECUTABLES) "Smart_Joint.bin"
+	@echo 'Finished building: $@'
+	@echo ' '
+
 # Other Targets
 clean:
-	-$(RM) Smart_Joint.elf Smart_Joint.list Smart_Joint.map default.size.stdout
+	-$(RM) Smart_Joint.bin Smart_Joint.elf Smart_Joint.list Smart_Joint.map default.size.stdout
 	-@echo ' '
 
-secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
+secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST) $(OBJCOPY_BIN)
 
 fail-specified-linker-script-missing:
 	@echo 'Error: Cannot find the specified linker script. Check the linker settings in the build configuration.'

@@ -104,7 +104,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 			flags.Message_Rx = 1;
 		}
 
-		else if(strstr(sim_rx_buffer, "CLOSED") != NULL)
+		else if(strstr((char*)sim_rx_buffer, "CLOSED") != NULL)
 		{
 			HAL_NVIC_SystemReset();
 		}
