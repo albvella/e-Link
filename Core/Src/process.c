@@ -53,7 +53,6 @@ void Save_Data(void)
 	flags.ADC_Complete = 0;
 	Address_Offset += PRESS_HALF_LEN;
 
-	memcpy(Saving_Buffer + Address_Offset, Volume_Period, MAX_VOLUME_LEN);
 	uint8_t current_period_cnt = Period_cnt;
 	Last_Volume = 0;
 	for(int i = 0; i < current_period_cnt; i++)
@@ -64,9 +63,27 @@ void Save_Data(void)
 	{
 		Last_Volume = (uint32_t)(Last_Volume / current_period_cnt);
 	}
+	Volume_Average_Buffer[Volume_Avg_Cnt] = Last_Volume;
+	Last_Volume = 0;
+	Volume_Avg_Cnt++;
+	uint8_t NonZero_samples = 0;
+	for(int i = 0; i < (config.samp_freq / ACC_FIFO_WATERMARK); i++)
+	{
+		if(Volume_Average_Buffer[i] != 0)
+		{
+			NonZero_samples++;
+			Last_Volume += Volume_Average_Buffer[i];
+		}
+	}
+	Last_Volume = (uint32_t)(Last_Volume / NonZero_samples);
 	memset(Volume_Period, 0, sizeof(Volume_Period));
+	if(Volume_Avg_Cnt >=  (config.samp_freq / ACC_FIFO_WATERMARK))
+	{
+		Volume_Avg_Cnt = 0;
+	}
 	Period_cnt = 0;
-	Address_Offset += MAX_VOLUME_LEN;
+	memcpy(Saving_Buffer + Address_Offset, &Last_Volume, sizeof(uint32_t));
+	Address_Offset += sizeof(uint32_t);
 
 	if(sys.ACC_Present)
 	{
@@ -183,8 +200,10 @@ void Start_Measure(void)
 	flags.SIM_isConnected = 1;
 	memset(Pressure, 0, sizeof(Pressure));
 	memset(Volume_Period, 0, sizeof(Volume_Period));
+	memset(Volume_Average_Buffer, 0, sizeof(Volume_Average_Buffer));
 	memset(Acceleration, 0, sizeof(Acceleration));
 	memset(&Supply, 0, sizeof(Supply));
+	Volume_Avg_Cnt = 0;
 	Temperature = 0;
 	Saved_Bytes = 0;
 	Saved_Samples = 0;
@@ -428,42 +447,18 @@ Compressed_Sizes_Typedef Compress_Sample(uint8_t *input, uint16_t input_len, uin
 	}
 	sizes.pressure_size = out_idx - pressure_start;
 
-	// --- 2. Flusso (RLE) ---
+	// --- 2. Flusso (Ultimo Valore) ---
 	uint32_t *counter = (uint32_t*)(input + PRESS_HALF_LEN);
-	uint16_t volume_start = out_idx;
 
-	uint32_t prev = counter[0];
-	uint16_t run_len = 1;
+	output[out_idx++] = counter[0] & 0xFF;
+	output[out_idx++] = (counter[0] >> 8) & 0xFF;
+	output[out_idx++] = (counter[0] >> 16) & 0xFF;
+	output[out_idx++] = (counter[0] >> 24) & 0xFF;
 
-	for (int i = 1; i < MAX_VOLUME_SAMPLES; i++)
-	{
-		if (counter[i] == prev && run_len < 255)
-		{
-			run_len++;
-		}
-		else
-		{
-			// Scrivi valore e run_len (4 byte valore + 1 byte run_len)
-			output[out_idx++] = prev & 0xFF;
-			output[out_idx++] = (prev >> 8) & 0xFF;
-			output[out_idx++] = (prev >> 16) & 0xFF;
-			output[out_idx++] = (prev >> 24) & 0xFF;
-			output[out_idx++] = run_len;
-			prev = counter[i];
-			run_len = 1;
-		}
-	}
-	// Scrivi l'ultimo run
-	output[out_idx++] = prev & 0xFF;
-	output[out_idx++] = (prev >> 8) & 0xFF;
-	output[out_idx++] = (prev >> 16) & 0xFF;
-	output[out_idx++] = (prev >> 24) & 0xFF;
-	output[out_idx++] = run_len;
-
-	sizes.volume_size = out_idx - volume_start;
+	sizes.volume_size = 4;		
 
 	// --- 3. Accelerometro (3 canali separati) ---
-	uint8_t *accel = input + PRESS_HALF_LEN + MAX_VOLUME_LEN;
+	uint8_t *accel = input + PRESS_HALF_LEN + VOLUME_LEN;
 	uint16_t accel_start = out_idx;
 
 	uint16_t x0 = accel[1] | (accel[2] << 8);

@@ -26,7 +26,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim)
 	T_prev = T_current;
 	Period_cnt++;
 	
-	if(Period_cnt >= MAX_VOLUME_SAMPLES)
+	if(Period_cnt >= VOLUME_SAMPLES)
 	{
 		Period_cnt = 0;
 	}

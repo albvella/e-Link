@@ -27,14 +27,16 @@
 #define ACC_FIFO_WATERMARK         200
 #define PRESS_HALF_SAMPLES         ACC_FIFO_WATERMARK
 #define PRESS_FULL_SAMPLES         PRESS_HALF_SAMPLES * 2
-#define MAX_VOLUME_SAMPLES         10
-#define MAX_VOLUME_LEN             MAX_VOLUME_SAMPLES * 4
+#define VOLUME_SAMPLES             10
+#define VOLUME_LEN                 4
 #define ACCELERATION_LEN           ACC_FIFO_WATERMARK * 7
 #define SUPPLY_LEN                 12
 #define TEMP_LEN                   2
 #define PRESS_HALF_LEN             PRESS_FULL_SAMPLES
+#define VOL_AVG_SECONDS            1
+#define VOL_AVG_BUFFER_LEN         1600 / ACC_FIFO_WATERMARK * VOL_AVG_SECONDS
 
-#define SAVING_BUFFER_LEN          PRESS_HALF_LEN + MAX_VOLUME_LEN + ACCELERATION_LEN
+#define SAVING_BUFFER_LEN          PRESS_HALF_LEN + VOLUME_LEN + ACCELERATION_LEN
 
 #define SAMPLE_SIZE                SAVING_BUFFER_LEN
 
@@ -70,12 +72,14 @@ extern uint32_t V_Period;
 
 extern supply_bus_t Supply;
 extern uint8_t Period_cnt;
+extern uint8_t Volume_Avg_Cnt;
 
 extern uint16_t Pressure[PRESS_FULL_SAMPLES];
-extern uint32_t Volume_Period[MAX_VOLUME_SAMPLES];
+extern uint32_t Volume_Period[VOLUME_SAMPLES];
 extern uint8_t Acceleration[ACC_FIFO_WATERMARK*7];
 extern uint16_t Last_Pressure;
 extern uint32_t Last_Volume;
+extern uint32_t Volume_Average_Buffer[VOL_AVG_BUFFER_LEN];
 extern Acceleration_Data_TypeDef Last_Acceleration;
 extern uint16_t Temperature;
 extern uint16_t Vbatt;

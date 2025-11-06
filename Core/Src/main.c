@@ -93,12 +93,14 @@ uint32_t V_Period = 0;
 
 supply_bus_t Supply = {0};
 uint8_t Period_cnt = 0;
+uint8_t Volume_Avg_Cnt = 0;
 
 uint16_t Pressure[PRESS_FULL_SAMPLES] = {0};
-uint32_t Volume_Period[MAX_VOLUME_SAMPLES] = {0};
+uint32_t Volume_Period[VOLUME_SAMPLES] = {0};
 uint8_t Acceleration[ACC_FIFO_WATERMARK*7] = {0};
 uint16_t Last_Pressure = 0;
 uint32_t Last_Volume = 0;
+uint32_t Volume_Average_Buffer[VOL_AVG_BUFFER_LEN] = {0};
 Acceleration_Data_TypeDef Last_Acceleration = {0};
 uint16_t Temperature = 0;
 uint16_t Vbatt = 0;
@@ -174,6 +176,9 @@ const unsigned char base64_table[256] = {
 	    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
 	};
 const char base64_enc_table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+uint32_t start = 0;
+uint32_t time = 0;
 
 /* USER CODE END PV */
 
@@ -335,7 +340,9 @@ int main(void)
 		case MEASURING_STATE:
 			if(flags.ADC_Complete && flags.ACC_Complete)
 			{
+				start = HAL_GetTick();
 				Save_Data();
+				time = HAL_GetTick() - start;
 				if(flags.BC_Interrupt)
 				{
 					BC_Read_Flags(&sys.BC_Flags);

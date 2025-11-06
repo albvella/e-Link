@@ -82,7 +82,7 @@ class eLink_Decompress_Measure:
             # Decomprimi
             try:
                 pressure = self._adpcm_decompress(pressure_bytes, 12)
-                flow, valid_count = self._rle_decompress_flow(flow_bytes)
+                flow, valid_count = self._get_flow(flow_bytes)
                 ax, ay, az = self._adpcm_decompress_accel(accel_bytes)
                 
                 self.pressure_data.extend(pressure)
@@ -103,46 +103,21 @@ class eLink_Decompress_Measure:
         print(f"\n✅ Successfully processed {block_count} blocks")
         print(f"Total samples: pressure={len(self.pressure_data)}, flow={len(self.flow_data)}, accel={len(self.ax_data)}")
 
-    def _rle_decompress_flow(self, comp_bytes: bytes) -> tuple[List[int], int]:
+    def _get_flow(self, comp_bytes: bytes) -> tuple[List[int], int]:
         """
-        Decompressione RLE per dati di flusso (uint32_t).
+        Lettura diretta di un valore uint32_t (NO RLE).
         
         Returns:
-            tuple: (lista_valori_decompressi, numero_campioni_validi)
+            tuple: (lista_con_un_solo_valore, 1)
         """
-        out = []
-        idx = 0
-        valid_samples_count = 0
+        if len(comp_bytes) < 4:
+            return [0], 1
         
-        # ✅ STEP 1: Decodifica tutti i blocchi RLE
-        temp_values = []
-        while idx + 5 <= len(comp_bytes):
-            value = struct.unpack_from('<I', comp_bytes, idx)[0]
-            run_len = comp_bytes[idx+4]
-            temp_values.append((value, run_len))
-            idx += 5
+        # Leggi direttamente il valore a 32 bit (little-endian)
+        value = struct.unpack_from('<I', comp_bytes, 0)[0]
         
-        # ✅ STEP 2: Controlla se ci sono dati validi (non-zero)
-        has_valid_data = any(value != 0 for value, _ in temp_values)
-        
-        if not has_valid_data:
-            # ✅ SE TUTTI ZERO: ritorna UN SOLO campione a zero
-            return [0], 1  # ✅ CAMBIATO: 1 campione (lo zero)
-        
-        # ✅ STEP 3: Processa solo fino al primo blocco con valore zero
-        for value, run_len in temp_values:
-            if value == 0:
-                # ✅ STOP al primo zero - il resto è padding
-                break
-            out.extend([value] * run_len)
-            valid_samples_count += run_len
-        
-        # ✅ STEP 4: Se per qualche motivo non abbiamo dati, un solo zero
-        if not out:
-            out = [0]
-            valid_samples_count = 1  # ✅ CAMBIATO: 1 campione (lo zero)
-            
-        return out, valid_samples_count
+        # Ritorna una lista con un solo valore
+        return [value], 1
 
     def _adpcm_decompress(self, comp_bytes: bytes, bits: int) -> List[int]:
         # Decompressione ADPCM generica
@@ -309,7 +284,7 @@ class eLink_Decompress_Measure:
 
 
 if __name__ == "__main__":
-    compressed_filename = 'C:/Users/albve/STM32CubeIDE/workspace_1.6.1/Smart_Joint/Python/251027_1158_comp.bin'
+    compressed_filename = 'C:/Users/albve/STM32CubeIDE/workspace_1.6.1/Smart_Joint/Python/251106_1454_comp.bin'
     decompressor = eLink_Decompress_Measure(compressed_filename)
 
     import matplotlib.pyplot as plt
@@ -320,18 +295,7 @@ if __name__ == "__main__":
     press_fullscale = 50  
     t = np.linspace(0, len(decompressor.ax_data) / f, len(decompressor.ax_data))
     
-    t_flow = []
-    
-    for block_idx, valid_count in enumerate(decompressor.flow_valid_counts):
-        if valid_count > 0: 
-            block_start_time = block_idx * block_duration
-            block_end_time = (block_idx + 1) * block_duration
-            
-            # Distribuisci i campioni uniformemente nel blocco
-            block_times = np.linspace(block_start_time, block_end_time, valid_count, endpoint=False)
-            t_flow.extend(block_times)
-    
-    t_flow = np.array(t_flow)
+    t_flow = np.linspace(0, len(decompressor.flow_data) / f * 200, len(decompressor.flow_data))
 
     ax = np.array(decompressor.ax_data) * 0.061 
     ay = np.array(decompressor.ay_data) * 0.061
