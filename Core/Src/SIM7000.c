@@ -59,11 +59,9 @@ int SIM_Init(void)
 	huart1.Init.BaudRate = 921600;
 	HAL_UART_Init(SIM_UART);
 
+
 	SIM_Send_Command("ATE0\r");                                                                   //Non verbose mode
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
-
-	SIM_Send_Command("AT+CPSMS?\r");
-	SIM_Receive_Response(response, 5000);
 
 	SIM_Send_Command("AT+CFUN=1\r");                                                              //Full functionality
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
@@ -98,7 +96,7 @@ int SIM_Init(void)
 
 	SIM_Send_Command("AT+CGDCONT?\r");
 	SIM_Receive_Response(response, 5000);
-	if(strstr(response, sys.apn) == NULL || strstr(response, "IPV4V6") != NULL)
+	if(strstr(response, sys.apn) == NULL)
 	{
 		sprintf(command, "AT+CGDCONT=1,\"IP\",\"%s\"\r", sys.apn);                                //Configurazione APN
 		SIM_Send_Command(command);
@@ -117,6 +115,9 @@ int SIM_Init(void)
 		}
 	}
 
+	SIM_Send_Command("AT+COPS=1,2,\"22210\"\r");                                                  //Selezione manueale operatore
+	SIM_Receive_Response(response, 180000);
+
 	SIM_Send_Command("AT+COPS?\r");                                                               //Operatore attuale
 	SIM_Receive_Response(response, 5000);
 	char* cops_ptr = strstr(response, "+COPS:");
@@ -125,14 +126,11 @@ int SIM_Init(void)
 	{
 		if(strstr(cops_ptr, "vodafone") == NULL)
 		{
-			SIM_Send_Command("AT+COPS=2\r");                                                          // Deregistra dalla rete
+			SIM_Send_Command("AT+COPS=2\r");                                                      // Deregistra dalla rete
 			SIM_Wait_Response("OK");
 			HAL_Delay(20000);
 		}
 	}
-
-	SIM_Send_Command("AT+COPS=0\r");
-	SIM_Wait_Response("OK");
 
 	SIM_Send_Command("AT+CEREG?\r");                                                              //Controllo registrazione alla rete
 	SIM_Receive_Response(response, 5000);
@@ -169,9 +167,6 @@ int SIM_Init(void)
 		return -1;  
 	}
 
-	SIM_Send_Command("AT+COPS?\r");                                                               //Operatore attuale
-	SIM_Receive_Response(response, 5000);
-
 	CSQ_PDP:
 	SIM_Send_Command("AT+CSQ\r");																  //Controllo qualità connessione
 	SIM_Receive_Response(response, 5000);
@@ -194,17 +189,18 @@ int SIM_Init(void)
 		}
 	}
 
-	SIM_Send_Command("AT+CNACT?\r");                                                              //Verifica indirizzo IP
-	SIM_Receive_Response(response, 5000);
-	if(SIM_Check_IP(response))
-	{
-		goto TCP;
-	}
-
-	SIM_Send_Command("AT+CIPSHUT\r");
+	SIM_Send_Command("AT+CPSMS?\r");
 	SIM_Receive_Response(response, 65000);
-	
-	TCP:
+
+	SIM_Send_Command("AT+CEDRXS?\r");
+	SIM_Receive_Response(response, 65000);
+
+	SIM_Send_Command("AT+CRAI?\r");
+	SIM_Receive_Response(response, 65000);
+
+	SIM_Send_Command("AT+CIPMUX=0\r");
+	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
+
 	SIM_Send_Command("AT+CIPRXGET=0\r");                                                         //Impostazione ricezione automatica da server TCP
 	if(SIM_Wait_Response("OK") != HAL_OK) return -1;
 
@@ -218,12 +214,14 @@ int SIM_Init(void)
 	SIM_Send_Command("AT+CIFSR\r");
 	SIM_Receive_Response(response, 65000);
 
+	HAL_Delay(10000);
+
 	const uint32_t MAX_TCP_RETRIES = 3;
 	uint32_t retry_count = 0;
 	int tcp_connected = 0;
 	while(!tcp_connected && retry_count < MAX_TCP_RETRIES)
 	{
-		sprintf(command, "AT+CIPSTART=\"TCP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);   //Connessione al server TCP
+		sprintf(command, "AT+CIPSTART=\"UDP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);   //Connessione al server TCP
 		SIM_Send_Command(command);
 		SIM_Wait_Response("OK");
 		SIM_Receive_Response(response, 180000);
@@ -237,8 +235,8 @@ int SIM_Init(void)
 		{
 			if(strstr(response, "PDP DEACT") != NULL)
 			{
-				SIM_Send_Command("AT+CIPSHUT\r");
-				SIM_Receive_Response(response, 65000);
+				SIM_Send_Command("AT+CGACT=1,1\r");
+				SIM_Receive_Response(response, 150000);
 			}
 			else if(strstr(response, "TCP CLOSED") != NULL)
 			{
@@ -257,6 +255,62 @@ int SIM_Init(void)
 			HAL_Delay(5000);  
 			retry_count++;
 		}
+	}
+
+	HAL_Delay(10000);
+
+	char rx_buffer[2000];
+	memset(rx_buffer, 0, sizeof(rx_buffer));
+	memset(response, 0, sizeof(response));
+	uint16_t len = 0;
+	uint16_t act_len = 0;
+	uint32_t initial = 0;
+	uint32_t time = 0;
+	sprintf(command, "H:%u", config.device_id);
+	while(1)
+	{
+		SIM_Send_Command("AT+CIPSEND=3\r");
+		len = SIM_Receive_Response(response, 5000);
+		if(len > 0)
+		{
+//			strcat(rx_buffer, response);
+			len = 0;
+		}
+		SIM_Send_Command(command);
+		len = SIM_Receive_Response(response, 5000);
+		act_len += len;
+		if(len > 0)
+		{
+			if(act_len < 2000)
+				strcat(rx_buffer, response);
+			else
+			{
+				act_len = 0;
+				memset(rx_buffer, 0, sizeof(rx_buffer));
+			}
+		}
+		else
+		{
+			initial = HAL_GetTick();
+
+			sprintf(command, "AT+CSTT=\"%s\",\"\",\"\"\r", sys.apn);
+			SIM_Send_Command(command);
+			SIM_Receive_Response(response, 65000);
+
+			SIM_Send_Command("AT+CIICR\r");
+			SIM_Receive_Response(response, 65000);
+
+			SIM_Send_Command("AT+CIFSR\r");
+			SIM_Receive_Response(response, 65000);
+
+			sprintf(command, "AT+CIPSTART=\"UDP\",\"%s\",%s\r", sys.TCP.IP_address, sys.TCP.Port);   //Connessione al server TCP
+			SIM_Send_Command(command);
+			SIM_Wait_Response("OK");
+			SIM_Receive_Response(response, 180000);
+
+			time = HAL_GetTick() - initial;
+		}
+		HAL_Delay(3000);
 	}
 
 	if(!tcp_connected)
@@ -308,10 +362,12 @@ void SIM_Reset(void)
 /*-----SEQUENZA DI ACCENSIONE-----*/
 void SIM_Startup_Seq(void)
 {
+	uint32_t TIMEOUT_POWERON = 10000;
+	uint32_t start_time = HAL_GetTick();
 	if(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET)
 	{
 		SIM_Power_On();
-		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET);            //Attesa accensione modulo
+		while(HAL_GPIO_ReadPin(LTE_STATUS_GPIO_Port, LTE_STATUS_Pin) != GPIO_PIN_SET && (HAL_GetTick() - start_time) < TIMEOUT_POWERON);            //Attesa accensione modulo
 
 	}
 	SIM_Reset();

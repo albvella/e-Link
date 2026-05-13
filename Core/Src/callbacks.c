@@ -10,6 +10,7 @@
 #include "global_variables.h"
 #include "peripherals.h"
 #include "string.h"
+#include "SIM7000.h"
 
 /* ------CALLBACK TIMER FLUSSO------*/
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim)
@@ -109,7 +110,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 			HAL_NVIC_SystemReset();
 		}
 
+		else if(strstr((char*)sim_rx_buffer, "PDP") != NULL)
+		{
 
+		}
 	}
 	
 	HAL_UARTEx_ReceiveToIdle_DMA(SIM_UART, sim_rx_buffer, SIM_RXBUFFER_SIZE);

@@ -42,7 +42,7 @@ Core/Src/callbacks.o: ../Core/Src/callbacks.c ../Core/Inc/main.h \
  ../Core/Inc/FatFs/ff.h ../Core/Inc/FatFs/ffconf.h \
  ../Core/Inc/global_variables.h ../Core/Inc/main.h ../Core/Inc/INA3221.h \
  ../Core/Inc/INA3221_reg.h ../Core/Inc/lsm6dsv16x_reg.h \
- ../Core/Inc/peripherals.h
+ ../Core/Inc/peripherals.h ../Core/Inc/SIM7000.h
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
 ../Core/Inc/stm32l4xx_hal_conf.h:
@@ -92,3 +92,4 @@ Core/Src/callbacks.o: ../Core/Src/callbacks.c ../Core/Inc/main.h \
 ../Core/Inc/INA3221_reg.h:
 ../Core/Inc/lsm6dsv16x_reg.h:
 ../Core/Inc/peripherals.h:
+../Core/Inc/SIM7000.h:

@@ -1,0 +1,24 @@
+# e-Link Web Interface - Requirements
+# Python 3.6 compatible versions (NO pyarrow dependency)
+
+# Core web framework - Dash
+dash==2.10.2
+dash-bootstrap-components==1.4.0
+
+# Data visualization
+plotly==5.3.0
+
+# Data processing
+pandas==1.1.5
+numpy==1.19.5
+
+# Dash dependencies (specific versions for Python 3.6)
+flask==2.2.5
+werkzeug==2.2.3
+click==8.0.4
+pillow==8.4.0
+typing-extensions
+
+# Existing project dependencies
+fastcrc>=0.3.0
+pytz>=2023.3

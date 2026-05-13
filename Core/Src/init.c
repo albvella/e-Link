@@ -223,7 +223,7 @@ void Config_Init(void)
         config.high_th[i] = 4096;
     }
     strcpy(config.tcp_IPaddress, "esdplab.unipa.it");
-    strcpy(config.tcp_Port, "21001");
+    strcpy(config.tcp_Port, "21003");
 
     if (f_open(&config_file, CONFIG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
     {

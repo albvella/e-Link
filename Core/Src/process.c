@@ -75,7 +75,10 @@ void Save_Data(void)
 			Last_Volume += Volume_Average_Buffer[i];
 		}
 	}
-	Last_Volume = (uint32_t)(Last_Volume / NonZero_samples);
+	if(NonZero_samples != 0)
+	{
+		Last_Volume = (uint32_t)(Last_Volume / NonZero_samples);
+	}
 	memset(Volume_Period, 0, sizeof(Volume_Period));
 	if(Volume_Avg_Cnt >=  (config.samp_freq / ACC_FIFO_WATERMARK))
 	{

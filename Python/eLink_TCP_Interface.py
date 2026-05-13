@@ -12,7 +12,7 @@ class eLinkTCPServer:
     Server TCP per la gestione di dispositivi e-Link.
     Gestisce connessioni multiple, invio comandi, ricezione misure, OTA e code di messaggi.
     """
-    def __init__(self, host='0.0.0.0', port=21001, handler=None):
+    def __init__(self, host='0.0.0.0', port=21003, handler=None):
         """
         Inizializza il server TCP.
 
@@ -549,7 +549,7 @@ class eLinkTCPServer:
         Returns:
             None
         """
-        client_sock.settimeout(180.0)      # Timeout di 3 minuti
+        client_sock.settimeout(240.0)      # Timeout di 4 minuti
         with client_sock:
             while True:
                 try:
